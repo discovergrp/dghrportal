@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Discover Group — HR Portal</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+
+:root{
+  --ink:#141a21; --paper:#f1eee8; --panel:#fff; --rule:#d8d3c8; --soft:#faf8f4;
+  --muted:#6d6759; --accent:#1f4f46; --accent2:#2f7d5b;
+  --low:#2f7d5b; --mod:#b8801f; --high:#c25a2b; --crit:#a32431; --lock:#7b3f8f;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:ui-sans-serif,"Segoe UI",Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5}
+button{font:inherit}
+input,select,textarea{font:inherit}
+
+/* ---------- login ---------- */
+#login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:var(--ink)}
+.loginbox{background:var(--panel);max-width:400px;width:100%;padding:34px;border-top:5px solid var(--accent)}
+.loginbox h1{margin:0 0 4px;font-size:17px;letter-spacing:.14em;text-transform:uppercase}
+.loginbox p{margin:0 0 22px;color:var(--muted);font-size:13px}
+.loginbox label{display:block;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin:14px 0 5px}
+.loginbox input,.loginbox select{width:100%;padding:10px;border:1px solid var(--rule);background:var(--soft)}
+.loginbox button{width:100%;margin-top:20px;padding:12px;background:var(--ink);color:#fff;border:none;font-weight:600;cursor:pointer}
+.loginbox .hint{font-size:12px;color:var(--muted);margin-top:16px;line-height:1.6}
+
+/* ---------- shell ---------- */
+#app{display:none;min-height:100vh;grid-template-columns:236px 1fr}
+#app.on{display:grid}
+aside{background:var(--ink);color:#e8e4da;padding:20px 0;position:sticky;top:0;height:100vh;overflow-y:auto}
+.brand{padding:0 20px 18px;border-bottom:1px solid #2b333c;margin-bottom:12px}
+.brand b{display:block;font-size:13px;letter-spacing:.14em;text-transform:uppercase}
+.brand span{font-size:11px;color:#8d877a}
+.navgrp{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#6f6a5f;padding:14px 20px 6px}
+.nav{display:block;width:100%;text-align:left;background:none;border:none;color:#c9c4b8;padding:9px 20px;cursor:pointer;font-size:14px;border-left:3px solid transparent}
+.nav:hover{background:#1d242c;color:#fff}
+.nav.on{background:#1d242c;color:#fff;border-left-color:var(--accent2);font-weight:600}
+.nav .lk{float:right;font-size:10px;color:var(--lock);letter-spacing:.05em}
+.who{padding:14px 20px;border-top:1px solid #2b333c;margin-top:14px;font-size:12px;color:#8d877a}
+.who b{display:block;color:#e8e4da;font-size:13px}
+.who button{margin-top:10px;background:none;border:1px solid #3a434d;color:#c9c4b8;padding:6px 12px;font-size:12px;cursor:pointer;width:100%}
+
+main{padding:26px 30px;max-width:1200px}
+.head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid var(--ink)}
+.head h2{margin:0;font-size:19px;letter-spacing:.04em}
+.head p{margin:4px 0 0;color:var(--muted);font-size:13px;max-width:64ch}
+
+.card{background:var(--panel);border:1px solid var(--rule);padding:20px;margin-bottom:18px}
+.card h3{margin:0 0 14px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;padding-bottom:8px;border-bottom:1px solid var(--rule)}
+.card h4{margin:18px 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
+input[type=text],input[type=number],input[type=date],input[type=time],input[type=password],select,textarea{
+  width:100%;padding:8px 10px;border:1px solid var(--rule);background:var(--soft)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:820px){.grid2{grid-template-columns:1fr}}
+
+.btn{background:var(--ink);color:#fff;border:none;padding:10px 18px;font-weight:600;cursor:pointer}
+.btn.small{padding:5px 11px;font-size:12px}
+.btn.g{background:none;border:1px solid var(--rule);color:var(--ink)}
+.btn.d{background:var(--crit)}
+.btn.a{background:var(--accent)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+tr:hover td{background:var(--soft)}
+.empty{color:var(--muted);font-size:13px;padding:14px 0}
+
+.badge{display:inline-block;padding:3px 10px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#fff;white-space:nowrap}
+.b1{background:var(--low)}.b2{background:var(--mod)}.b3{background:var(--high)}.b4{background:var(--crit)}
+.bg{background:#5b6470}.ba{background:var(--accent)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px}
+.tile{background:var(--panel);border:1px solid var(--rule);padding:16px}
+.tile .n{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+.tile .l{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:4px}
+
+.conf{border-left:4px solid var(--lock);background:#f7f2f9}
+.conftag{display:inline-block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--lock);font-weight:700;margin-bottom:8px}
+.hidden{display:none!important}
+.note{font-size:12px;color:var(--muted);margin-top:10px}
+.qrow{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid #ece8df}
+.qrow:last-child{border-bottom:none}
+.toggle{display:flex;border:1px solid var(--rule);flex:0 0 auto}
+.toggle button{border:none;background:var(--soft);font-size:13px;padding:6px 14px;cursor:pointer;color:var(--muted)}
+.toggle button.yes.on{background:var(--ink);color:#fff}
+.toggle button.no.on{background:#e4dfd4;color:var(--ink)}
+.rec{padding:12px 14px;border-left:4px solid var(--ink);background:var(--soft);font-size:14px;margin-top:12px}
+.clockbox{text-align:center;padding:24px}
+.clocktime{font-size:44px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.clockdate{color:var(--muted);font-size:13px;margin-bottom:18px}
+.chk{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid #ece8df}
+.chk input{margin-top:3px;width:16px;height:16px;flex:0 0 auto}
+.chk.done span{text-decoration:line-through;color:var(--muted)}
+.bar{height:7px;background:#e4dfd4;overflow:hidden;margin:8px 0}
+.bar i{display:block;height:100%;background:var(--accent2)}
+.mono{font-variant-numeric:tabular-nums}
+.right{text-align:right}
+@media(max-width:760px){#app.on{grid-template-columns:1fr}aside{position:static;height:auto}main{padding:18px}}
+
+.msg{padding:10px 12px;font-size:13px;margin-top:14px;border-left:3px solid}
+.msg.err{background:#fdf0f0;border-color:var(--crit);color:#7d1a24}
+.msg.ok{background:#eef7f2;border-color:var(--low);color:#1d5340}
+.spin{display:inline-block;width:13px;height:13px;border:2px solid #fff;border-top-color:transparent;
+  border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;margin-right:7px}
+@keyframes sp{to{transform:rotate(360deg)}}
+#boot{position:fixed;inset:0;background:var(--ink);color:#c9c4b8;display:flex;
+  align-items:center;justify-content:center;font-size:13px;z-index:99}
+</style>
+</head>
+<body>
+
+<div id="boot">Loading portal…</div>
+
+<!-- ============ LOGIN ============ -->
+<div id="login" style="display:none">
+  <div class="loginbox">
+    <h1>Discover Group</h1>
+    <p>Human Resources Portal</p>
+
+    <div id="signinPane">
+      <label>Email</label>
+      <input type="text" id="li_email" autocomplete="username" placeholder="you@discovergroup.com">
+      <label>Password</label>
+      <input type="password" id="li_pass" autocomplete="current-password">
+      <button id="signinBtn">Sign in</button>
+      <p class="hint">Employees see their own record. HR administrators see everyone, plus payroll and the confidential compliance file.</p>
+      <p class="hint" style="margin-top:10px">
+        <a href="#" id="toSetup" style="color:var(--accent)">First time? Set up the first HR account</a>
+      </p>
+    </div>
+
+    <div id="setupPane" class="hidden">
+      <p class="hint" style="margin:0 0 12px">
+        This creates the first HR administrator. Run this once, then add everyone else from the directory.</p>
+      <label>Full name</label>
+      <input type="text" id="su_name">
+      <label>Email</label>
+      <input type="text" id="su_email" autocomplete="username">
+      <label>Password</label>
+      <input type="password" id="su_pass" autocomplete="new-password" placeholder="At least 8 characters">
+      <button id="setupBtn">Create HR account</button>
+      <p class="hint" style="margin-top:10px">
+        <a href="#" id="toSignin" style="color:var(--accent)">Back to sign in</a></p>
+    </div>
+
+    <div id="loginMsg"></div>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app">
+  <aside>
+    <div class="brand"><b>Discover Group</b><span>HR Portal</span></div>
+    <div class="navgrp">My workspace</div>
+    <button class="nav on" data-v="dash">Dashboard</button>
+    <button class="nav" data-v="profile">My profile</button>
+    <button class="nav" data-v="contract">Contract &amp; job description</button>
+    <button class="nav" data-v="clock">Time log</button>
+    <button class="nav" data-v="leave">Leave</button>
+    <button class="nav" data-v="onboard">Onboarding</button>
+    <button class="nav" data-v="deliver">Deliverables</button>
+    <div class="navgrp hrOnly">HR administration</div>
+    <button class="nav hrOnly" data-v="directory">Employee directory</button>
+    <button class="nav hrOnly" data-v="approvals">Leave approvals</button>
+    <button class="nav hrOnly" data-v="attendance">Attendance register</button>
+    <button class="nav hrOnly" data-v="payroll">Payroll sheet <span class="lk">◆</span></button>
+    <button class="nav hrOnly" data-v="compliance">Compliance file <span class="lk">◆</span></button>
+    <button class="nav hrOnly" data-v="assess">Transition assessment</button>
+    <div class="who">
+      <b id="whoName">—</b><span id="whoRole">—</span>
+      <button id="logoutBtn">Sign out</button>
+    </div>
+  </aside>
+
+  <main>
+    <!-- DASHBOARD -->
+    <section data-view="dash">
+      <div class="head"><div><h2 id="dashHi">Dashboard</h2><p id="dashSub"></p></div></div>
+      <div class="tiles" id="dashTiles"></div>
+      <div class="grid2">
+        <div class="card"><h3>Today</h3><div id="dashToday"></div></div>
+        <div class="card"><h3>Needs attention</h3><div id="dashAttn"></div></div>
+      </div>
+    </section>
+
+    <!-- MY PROFILE -->
+    <section data-view="profile" class="hidden">
+      <div class="head"><div><h2>My profile</h2><p>Keep your personal and emergency details current. HR is notified of changes.</p></div></div>
+      <div class="card">
+        <h3>Personal details</h3>
+        <div class="grid">
+          <div><label>Full name</label><input type="text" id="p_name"></div>
+          <div><label>Position</label><input type="text" id="p_pos"></div>
+          <div><label>Department</label><input type="text" id="p_dept"></div>
+          <div><label>Employee ID</label><input type="text" id="p_id"></div>
+          <div><label>Mobile</label><input type="text" id="p_phone"></div>
+          <div><label>Email</label><input type="text" id="p_email"></div>
+          <div><label>Date started</label><input type="date" id="p_start"></div>
+          <div><label>Birth date</label><input type="date" id="p_dob"></div>
+        </div>
+        <h4>Address</h4>
+        <textarea id="p_addr" rows="2"></textarea>
+        <h4>Emergency contact</h4>
+        <div class="grid">
+          <div><label>Name</label><input type="text" id="p_ename"></div>
+          <div><label>Relationship</label><input type="text" id="p_erel"></div>
+          <div><label>Contact number</label><input type="text" id="p_ephone"></div>
+        </div>
+        <h4>Government numbers</h4>
+        <div class="grid">
+          <div><label>SSS</label><input type="text" id="p_sss"></div>
+          <div><label>PhilHealth</label><input type="text" id="p_phic"></div>
+          <div><label>Pag-IBIG</label><input type="text" id="p_hdmf"></div>
+          <div><label>TIN</label><input type="text" id="p_tin"></div>
+        </div>
+        <div class="row" style="margin-top:16px"><button class="btn" id="saveProfile">Save profile</button></div>
+      </div>
+    </section>
+
+    <!-- CONTRACT -->
+    <section data-view="contract" class="hidden">
+      <div class="head"><div><h2>Contract &amp; job description</h2><p>Your current engagement terms and the duties you are accountable for.</p></div></div>
+      <div class="grid2">
+        <div class="card">
+          <h3>Engagement</h3>
+          <div id="contractRead"></div>
+          <div id="contractEdit" class="hrOnly">
+            <h4>HR: update terms</h4>
+            <div class="grid">
+              <div><label>Employment type</label><select id="c_type">
+                <option>Independent contractor</option><option>Probationary</option>
+                <option>Regular</option><option>Project-based</option><option>Fixed-term</option></select></div>
+              <div><label>Status</label><select id="c_status"><option>Active</option><option>On leave</option><option>Separated</option></select></div>
+              <div><label>Contract start</label><input type="date" id="c_start"></div>
+              <div><label>Contract end / regularization</label><input type="date" id="c_end"></div>
+              <div><label>Basic monthly rate (₱)</label><input type="number" id="c_rate"></div>
+              <div><label>Work schedule</label><input type="text" id="c_sched" placeholder="Mon–Fri 9:00–18:00"></div>
+            </div>
+            <div class="row" style="margin-top:14px"><button class="btn" id="saveContract">Save contract</button></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Job description</h3>
+          <div><label>Purpose of the role</label><textarea id="c_purpose" rows="3"></textarea></div>
+          <h4>Key duties</h4>
+          <textarea id="c_duties" rows="7" placeholder="One duty per line"></textarea>
+          <h4>Reports to</h4>
+          <input type="text" id="c_reports">
+          <div class="row" style="margin-top:14px"><button class="btn" id="saveJD">Save job description</button></div>
+          <p class="note">Employees can read this at any time. Only HR can edit.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- TIME LOG -->
+    <section data-view="clock" class="hidden">
+      <div class="head"><div><h2>Time log</h2><p>Log in when you start and out when you finish. Entries are visible to HR.</p></div></div>
+      <div class="grid2">
+        <div class="card">
+          <div class="clockbox">
+            <div class="clocktime" id="liveClock">--:--</div>
+            <div class="clockdate" id="liveDate"></div>
+            <div id="clockState" style="margin-bottom:16px"></div>
+            <div class="row" style="justify-content:center">
+              <button class="btn a" id="inBtn">Log in</button>
+              <button class="btn d" id="outBtn">Log out</button>
+            </div>
+            <p class="note" id="clockNote"></p>
+          </div>
+        </div>
+        <div class="card">
+          <h3>My recent entries</h3>
+          <table><thead><tr><th>Date</th><th>In</th><th>Out</th><th class="right">Hours</th></tr></thead>
+          <tbody id="myLogRows"></tbody></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- LEAVE -->
+    <section data-view="leave" class="hidden">
+      <div class="head"><div><h2>Leave</h2><p>Request time off and track your remaining balance.</p></div></div>
+      <div class="tiles" id="leaveTiles"></div>
+      <div class="grid2">
+        <div class="card">
+          <h3>Request leave</h3>
+          <div class="grid">
+            <div><label>Type</label><select id="l_type">
+              <option>Vacation</option><option>Sick</option><option>Emergency</option>
+              <option>Bereavement</option><option>Maternity / Paternity</option><option>Unpaid</option></select></div>
+            <div><label>Start date</label><input type="date" id="l_from"></div>
+            <div><label>End date</label><input type="date" id="l_to"></div>
+            <div><label>Days</label><input type="number" id="l_days" step="0.5" min="0.5" value="1"></div>
+          </div>
+          <div style="margin-top:12px"><label>Reason</label><textarea id="l_reason" rows="3"></textarea></div>
+          <div class="row" style="margin-top:14px"><button class="btn" id="submitLeave">Submit request</button></div>
+        </div>
+        <div class="card">
+          <h3>My requests</h3>
+          <table><thead><tr><th>Type</th><th>Dates</th><th>Days</th><th>Status</th></tr></thead>
+          <tbody id="myLeaveRows"></tbody></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ONBOARDING -->
+    <section data-view="onboard" class="hidden">
+      <div class="head"><div><h2>Onboarding</h2><p>Complete each item. HR can see your progress and confirm document receipt.</p></div></div>
+      <div class="card">
+        <h3>Progress</h3>
+        <div class="bar"><i id="onbBar" style="width:0%"></i></div>
+        <p class="note" id="onbPct">0% complete</p>
+      </div>
+      <div class="grid2">
+        <div class="card"><h3>Requirements &amp; documents</h3><div id="onbDocs"></div></div>
+        <div class="card"><h3>Orientation &amp; setup</h3><div id="onbSetup"></div></div>
+      </div>
+    </section>
+
+    <!-- DELIVERABLES -->
+    <section data-view="deliver" class="hidden">
+      <div class="head"><div><h2>Deliverables</h2><p>Assigned outputs with due dates. Update status as you go.</p></div></div>
+      <div class="card">
+        <h3>Add a deliverable</h3>
+        <div class="grid">
+          <div style="grid-column:1/-1"><label>Title</label><input type="text" id="d_title"></div>
+          <div><label>Due date</label><input type="date" id="d_due"></div>
+          <div><label>Priority</label><select id="d_pri"><option>Normal</option><option>High</option><option>Critical</option></select></div>
+          <div class="hrOnly"><label>Assign to</label><select id="d_who"></select></div>
+        </div>
+        <div style="margin-top:12px"><label>Description / acceptance criteria</label><textarea id="d_desc" rows="2"></textarea></div>
+        <div class="row" style="margin-top:14px"><button class="btn" id="addDeliv">Add deliverable</button></div>
+      </div>
+      <div class="card">
+        <h3>Assigned</h3>
+        <table><thead><tr><th>Title</th><th>Due</th><th>Priority</th><th>Status</th><th></th></tr></thead>
+        <tbody id="delivRows"></tbody></table>
+      </div>
+    </section>
+
+    <!-- DIRECTORY (HR) -->
+    <section data-view="directory" class="hidden">
+      <div class="head"><div><h2>Employee directory</h2><p>Every worker on record. Open a profile to view or edit their full file.</p></div>
+        <div class="row"><button class="btn" id="newEmpBtn">Add employee</button><button class="btn g" id="expEmp">Export CSV</button></div></div>
+      <div class="card">
+        <div class="row" style="margin-bottom:12px">
+          <input type="text" id="dirSearch" placeholder="Search name, position, department" style="flex:1;min-width:180px">
+          <select id="dirFilter" style="width:auto"><option value="">All types</option>
+            <option>Independent contractor</option><option>Probationary</option><option>Regular</option>
+            <option>Project-based</option><option>Fixed-term</option></select>
+        </div>
+        <table><thead><tr><th>Name</th><th>Position</th><th>Dept</th><th>Type</th><th>Started</th><th>Status</th><th></th></tr></thead>
+        <tbody id="dirRows"></tbody></table>
+      </div>
+      <div class="card hidden" id="newEmpCard">
+        <h3>Add employee</h3>
+        <div class="grid">
+          <div><label>Full name</label><input type="text" id="n_name"></div>
+          <div><label>Position</label><input type="text" id="n_pos"></div>
+          <div><label>Department</label><input type="text" id="n_dept"></div>
+          <div><label>Employment type</label><select id="n_type">
+            <option>Independent contractor</option><option>Probationary</option><option>Regular</option>
+            <option>Project-based</option><option>Fixed-term</option></select></div>
+          <div><label>Date started</label><input type="date" id="n_start"></div>
+          <div><label>Basic monthly rate (₱)</label><input type="number" id="n_rate"></div>
+        </div>
+        <div class="row" style="margin-top:14px"><button class="btn" id="createEmp">Create record</button>
+          <button class="btn g" id="cancelEmp">Cancel</button></div>
+      </div>
+    </section>
+
+    <!-- APPROVALS (HR) -->
+    <section data-view="approvals" class="hidden">
+      <div class="head"><div><h2>Leave approvals</h2><p>Pending requests across the company.</p></div></div>
+      <div class="card"><h3>Pending</h3>
+        <table><thead><tr><th>Employee</th><th>Type</th><th>Dates</th><th>Days</th><th>Reason</th><th></th></tr></thead>
+        <tbody id="appRows"></tbody></table></div>
+      <div class="card"><h3>Decided</h3>
+        <table><thead><tr><th>Employee</th><th>Type</th><th>Dates</th><th>Days</th><th>Status</th></tr></thead>
+        <tbody id="appDone"></tbody></table></div>
+    </section>
+
+    <!-- ATTENDANCE (HR) -->
+    <section data-view="attendance" class="hidden">
+      <div class="head"><div><h2>Attendance register</h2><p>All time entries. Filter by employee or date.</p></div>
+        <div class="row"><button class="btn g" id="expAtt">Export CSV</button></div></div>
+      <div class="card">
+        <div class="row" style="margin-bottom:12px">
+          <select id="attEmp" style="width:auto"><option value="">All employees</option></select>
+          <input type="date" id="attDate" style="width:auto">
+          <button class="btn g small" id="attClear">Clear filters</button>
+        </div>
+        <table><thead><tr><th>Date</th><th>Employee</th><th>In</th><th>Out</th><th class="right">Hours</th></tr></thead>
+        <tbody id="attRows"></tbody></table>
+      </div>
+    </section>
+
+    <!-- PAYROLL (HR CONFIDENTIAL) -->
+    <section data-view="payroll" class="hidden">
+      <div class="head"><div><h2>Payroll sheet</h2><p>Confidential. Visible to HR administrators only.</p></div>
+        <div class="row"><button class="btn g" id="expPay">Export CSV</button></div></div>
+      <div class="card conf">
+        <span class="conftag">◆ Confidential — HR access</span>
+        <h3>Period</h3>
+        <div class="grid">
+          <div><label>Cut-off</label><input type="text" id="pr_period" placeholder="e.g. 1–15 July 2026"></div>
+          <div><label>Pay date</label><input type="date" id="pr_date"></div>
+        </div>
+        <p class="note">Rates are pulled from each employee's contract. Enter adjustments per row, then save the run.</p>
+      </div>
+      <div class="card conf">
+        <span class="conftag">◆ Confidential</span>
+        <h3>Computation</h3>
+        <div style="overflow-x:auto">
+        <table><thead><tr>
+          <th>Employee</th><th>Basic</th><th>Days/OT</th><th>Allowance</th>
+          <th>SSS</th><th>PhilHealth</th><th>Pag-IBIG</th><th>Tax</th><th>Other</th><th class="right">Net pay</th>
+        </tr></thead><tbody id="payRows"></tbody>
+        <tfoot><tr><th colspan="9" class="right">Total net</th><th class="right mono" id="payTotal">₱0.00</th></tr></tfoot></table>
+        </div>
+        <div class="row" style="margin-top:14px"><button class="btn" id="savePay">Save payroll run</button></div>
+      </div>
+      <div class="card"><h3>Saved runs</h3>
+        <table><thead><tr><th>Period</th><th>Pay date</th><th>Headcount</th><th class="right">Total net</th><th></th></tr></thead>
+        <tbody id="payHist"></tbody></table></div>
+    </section>
+
+    <!-- COMPLIANCE (HR CONFIDENTIAL) -->
+    <section data-view="compliance" class="hidden">
+      <div class="head"><div><h2>Compliance file</h2><p>Incident reports, notices to explain, and warnings. Confidential — HR access only.</p></div></div>
+      <div class="tiles" id="compTiles"></div>
+      <div class="card conf">
+        <span class="conftag">◆ Confidential — HR access</span>
+        <h3>Record an entry</h3>
+        <div class="grid">
+          <div><label>Employee</label><select id="k_emp"></select></div>
+          <div><label>Record type</label><select id="k_type">
+            <option>Incident report</option><option>Notice to explain</option>
+            <option>Written warning</option><option>Final warning</option>
+            <option>Suspension</option><option>Commendation</option></select></div>
+          <div><label>Date of incident</label><input type="date" id="k_date"></div>
+          <div><label>Severity</label><select id="k_sev"><option>Minor</option><option>Serious</option><option>Grave</option></select></div>
+          <div><label>Reported by</label><input type="text" id="k_by"></div>
+          <div><label>Policy referenced</label><input type="text" id="k_pol" placeholder="e.g. Code of Conduct §4.2"></div>
+        </div>
+        <div style="margin-top:12px"><label>Description of the incident</label><textarea id="k_desc" rows="4"></textarea></div>
+        <div style="margin-top:12px"><label>Action required / directive to employee</label><textarea id="k_act" rows="3"
+          placeholder="For a notice to explain, state the period to respond."></textarea></div>
+        <div class="grid" style="margin-top:12px">
+          <div><label>Response due</label><input type="date" id="k_due"></div>
+          <div><label>Status</label><select id="k_status">
+            <option>Open</option><option>Awaiting response</option><option>Response received</option>
+            <option>Resolved</option><option>Escalated</option></select></div>
+        </div>
+        <div class="row" style="margin-top:14px"><button class="btn" id="addComp">File record</button></div>
+        <p class="note">Due process matters: a notice to explain should give the employee a reasonable period to respond in writing before any decision, and a hearing should follow. Have counsel review anything that could lead to dismissal.</p>
+      </div>
+      <div class="card">
+        <h3>Filed records</h3>
+        <div class="row" style="margin-bottom:12px">
+          <select id="compFilter" style="width:auto"><option value="">All employees</option></select>
+        </div>
+        <table><thead><tr><th>Date</th><th>Employee</th><th>Type</th><th>Severity</th><th>Status</th><th></th></tr></thead>
+        <tbody id="compRows"></tbody></table>
+      </div>
+    </section>
+
+    <!-- TRANSITION ASSESSMENT (HR) -->
+    <section data-view="assess" class="hidden">
+      <div class="head"><div><h2>Contractor transition assessment</h2>
+        <p>Score an engagement against the control factors to determine the correct transition path.</p></div></div>
+      <div class="tiles" id="asTiles"></div>
+      <div class="card">
+        <h3>Worker</h3>
+        <div class="grid">
+          <div><label>Select from directory</label><select id="a_emp"><option value="">— New / unlisted worker —</option></select></div>
+          <div><label>Name</label><input type="text" id="a_name"></div>
+          <div><label>Position</label><input type="text" id="a_pos"></div>
+          <div><label>Years with Discover</label><input type="number" id="a_years" step="0.5" min="0"></div>
+          <div><label>Payment basis</label><select id="a_pay"><option>Per project</option><option>Commission</option><option>Monthly</option></select></div>
+          <div><label>Contractor agreement signed?</label><select id="a_agr"><option>Yes</option><option>No</option></select></div>
+          <div><label>Supervisor</label><input type="text" id="a_sup"></div>
+          <div><label>Assessed by</label><input type="text" id="a_by"></div>
+        </div>
+      </div>
+      <div class="card"><h3>Control factors</h3><div id="qlist"></div>
+        <div style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;
+             background:var(--ink);color:#fff;padding:14px 18px">
+          <div><div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#a9a396">Total score</div>
+            <div style="font-size:28px;font-weight:700" class="mono" id="scoreNum">0</div></div>
+          <div id="scoreBadge"><span class="badge b1">Low risk</span></div>
+          <div style="flex:1;min-width:170px;font-size:13px;color:#c9c4b8" id="scoreHint">0 of 12 factors answered</div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Recommendation</h3>
+        <div id="recBox" class="rec">Answer the factors above to generate a recommendation.</div>
+        <div style="margin-top:12px"><label>Notes for counsel</label><textarea id="a_notes" rows="3"></textarea></div>
+        <div class="row" style="margin-top:14px"><button class="btn" id="saveAssess">Save assessment</button>
+          <button class="btn g" id="clearAssess">Clear</button>
+          <button class="btn g" id="expAssess">Export CSV</button></div>
+        <p class="note">This applies the company scoring guide. It is not a legal opinion — High and Critical results should go to counsel before any contract is issued.</p>
+      </div>
+      <div class="card"><h3>Completed assessments</h3>
+        <table><thead><tr><th>Name</th><th>Position</th><th>Yrs</th><th>Score</th><th>Risk</th><th>Transition</th><th></th></tr></thead>
+        <tbody id="asRows"></tbody></table></div>
+      <div class="card"><h3>Risk matrix reference</h3>
+        <table><thead><tr><th style="width:100px">Level</th><th>Profile</th><th style="width:210px">Action</th><th style="width:100px">Court risk</th></tr></thead>
+        <tbody>
+        <tr><td><span class="badge b1">Low</span><br><span class="note mono">0–20</span></td>
+          <td>Under 2–3 years · no fixed hours · free to serve other clients · paid per project or commission · own equipment · company controls results only · no daily supervision</td>
+          <td>6-month probationary employment with written contract, written KPIs, DOLE-compliant onboarding.</td><td>10–20%</td></tr>
+        <tr><td><span class="badge b2">Moderate</span><br><span class="note mono">21–45</span></td>
+          <td>Sometimes follows company schedule · weekly reporting · uses company systems · recurring work · quality reviewed · some supervision</td>
+          <td>Transition directly to regular, or probation with strong documentation and written acknowledgment that employment begins on the transition date. Legal review first.</td><td>30–45%</td></tr>
+        <tr><td><span class="badge b3">High</span><br><span class="note mono">46–70</span></td>
+          <td>Several years continuous · fixed hours · daily supervisor · required attendance · leave approval · core business functions · integrated into departments</td>
+          <td>Do not place under probation. Transition directly as a regular employee.</td><td>70–90% if probation used</td></tr>
+        <tr><td><span class="badge b4">Critical</span><br><span class="note mono">71–95</span></td>
+          <td>All of: years of continuous service · full-time · fixed schedule · daily attendance · team leader · disciplinary rules · exclusive · company equipment · required meetings · core work</td>
+          <td>Treat as an existing regular employee. Do not require probation.</td><td>95%+ if probation imposed</td></tr>
+        </tbody></table></div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+/* ===================== CONFIG ===================== */
+const SUPABASE_URL="https://gkzawpmovzsvscvzmpwa.supabase.co";
+const SUPABASE_KEY="sb_publishable_TM5knTlqVJeV4rb0DdrejQ__cE2YaeJ";
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+const peso=n=>"₱"+(Number(n)||0).toLocaleString("en-PH",{minimumFractionDigits:2,maximumFractionDigits:2});
+const today=()=>new Date().toISOString().slice(0,10);
+
+let ME=null;          // my employees row
+let ROLE="employee";
+let VIEWING=null;     // employee whose file HR is viewing
+let D={employees:[],logs:[],leave:[],deliverables:[],onboarding:[],compliance:[],payruns:[],assessments:[]};
+
+const ONB_DOCS=["Signed contract returned","NBI clearance","Birth certificate (PSA)","SSS number / E-1",
+ "PhilHealth MDR","Pag-IBIG number","TIN / BIR 1902 or 2305","2x2 ID photos","Certificate of employment (previous)",
+ "Bank account details for payroll"];
+const ONB_SETUP=["HR orientation completed","Code of conduct acknowledged","Company email issued",
+ "Systems access granted","Equipment issued and signed for","Introduced to team","Job description discussed and signed",
+ "KPIs and probation terms explained","Emergency contact recorded","Timekeeping process explained"];
+
+const Q=[
+ {k:"sched",t:"Fixed work schedule",p:10},{k:"daily",t:"Daily supervision",p:10},
+ {k:"method",t:"Company controls the work method",p:10},{k:"core",t:"Performs core business work",p:10},
+ {k:"cont",t:"Continuous service over 2 years",p:10},{k:"excl",t:"Exclusive service to Discover",p:10},
+ {k:"salary",t:"Monthly salary instead of per-project payment",p:10},{k:"equip",t:"Uses company equipment",p:5},
+ {k:"att",t:"Attendance is monitored",p:5},{k:"leave",t:"Leave approval required",p:5},
+ {k:"email",t:"Uses company email/system as primary work platform",p:5},
+ {k:"meet",t:"Required meetings and directives",p:5}];
+const ans={};
+
+function msg(t,kind){ $("loginMsg").innerHTML=`<div class="msg ${kind}">${esc(t)}</div>`; }
+function busy(btn,on,label){ btn.disabled=on; btn.innerHTML=on?`<span class="spin"></span>Working…`:label; }
+function toast(m){ alert(m); }
+
+/* ===================== AUTH ===================== */
+$("toSetup").onclick=e=>{e.preventDefault();$("signinPane").classList.add("hidden");
+  $("setupPane").classList.remove("hidden");$("loginMsg").innerHTML="";};
+$("toSignin").onclick=e=>{e.preventDefault();$("setupPane").classList.add("hidden");
+  $("signinPane").classList.remove("hidden");$("loginMsg").innerHTML="";};
+
+$("signinBtn").onclick=async()=>{
+  const email=$("li_email").value.trim(), pass=$("li_pass").value;
+  if(!email||!pass){msg("Enter your email and password.","err");return;}
+  busy($("signinBtn"),true);
+  const {error}=await sb.auth.signInWithPassword({email,password:pass});
+  busy($("signinBtn"),false,"Sign in");
+  if(error){msg(error.message,"err");return;}
+  await afterLogin();
+};
+$("li_pass").addEventListener("keydown",e=>{if(e.key==="Enter")$("signinBtn").click();});
+
+$("setupBtn").onclick=async()=>{
+  const name=$("su_name").value.trim(),email=$("su_email").value.trim(),pass=$("su_pass").value;
+  if(!name||!email||!pass){msg("Fill in all three fields.","err");return;}
+  if(pass.length<8){msg("Use at least 8 characters for the password.","err");return;}
+  busy($("setupBtn"),true);
+  const {data,error}=await sb.auth.signUp({email,password:pass});
+  if(error){busy($("setupBtn"),false,"Create HR account");msg(error.message,"err");return;}
+  if(!data.session){
+    busy($("setupBtn"),false,"Create HR account");
+    msg("Account created. Check your email to confirm, then sign in.","ok");
+    return;
+  }
+  const {error:e2}=await sb.from("employees").insert({
+    user_id:data.user.id,is_hr:true,name,email,position:"HR Administrator",
+    employment_type:"Regular",status:"Active",date_started:today()});
+  busy($("setupBtn"),false,"Create HR account");
+  if(e2){msg("Account made but the employee record failed: "+e2.message,"err");return;}
+  await afterLogin();
+};
+
+$("logoutBtn").onclick=async()=>{
+  if(!confirm("Sign out of the portal?"))return;
+  await sb.auth.signOut(); location.reload();
+};
+
+async function afterLogin(){
+  const {data:{user}}=await sb.auth.getUser();
+  if(!user){showLogin();return;}
+  const {data:emp,error}=await sb.from("employees").select("*").eq("user_id",user.id).maybeSingle();
+  if(error){msg("Could not load your record: "+error.message,"err");showLogin();return;}
+  if(!emp){
+    msg("Your login works, but no employee record is linked to it. Ask HR to add you to the directory.","err");
+    await sb.auth.signOut(); showLogin(); return;
+  }
+  ME=emp; VIEWING=emp; ROLE=emp.is_hr?"hr":"employee";
+  $("boot").style.display="none";
+  $("login").style.display="none";
+  $("app").classList.add("on");
+  document.querySelectorAll(".hrOnly").forEach(n=>n.classList.toggle("hidden",ROLE!=="hr"));
+  $("whoName").textContent=emp.name;
+  $("whoRole").textContent=ROLE==="hr"?"HR administrator · full access":(emp.position||"Employee");
+  buildQuestions();
+  await loadAll();
+  go("dash");
+}
+function showLogin(){ $("boot").style.display="none"; $("login").style.display="flex"; }
+
+/* ===================== DATA ===================== */
+async function loadAll(){
+  const jobs=[
+    sb.from("employees").select("*").order("name"),
+    sb.from("time_logs").select("*").order("log_date",{ascending:false}).limit(500),
+    sb.from("leave_requests").select("*").order("created_at",{ascending:false}),
+    sb.from("deliverables").select("*").order("due_date"),
+    sb.from("onboarding_items").select("*")
+  ];
+  if(ROLE==="hr"){
+    jobs.push(sb.from("compliance_records").select("*").order("created_at",{ascending:false}));
+    jobs.push(sb.from("payroll_runs").select("*").order("created_at",{ascending:false}));
+    jobs.push(sb.from("assessments").select("*").order("created_at",{ascending:false}));
+  }
+  const r=await Promise.all(jobs);
+  const bad=r.find(x=>x.error);
+  if(bad){console.error(bad.error);}
+  D.employees=r[0].data||[]; D.logs=r[1].data||[]; D.leave=r[2].data||[];
+  D.deliverables=r[3].data||[]; D.onboarding=r[4].data||[];
+  if(ROLE==="hr"){D.compliance=r[5].data||[];D.payruns=r[6].data||[];D.assessments=r[7].data||[];}
+  if(ME){const fresh=D.employees.find(e=>e.id===ME.id); if(fresh)ME=fresh;}
+  if(VIEWING){const f=D.employees.find(e=>e.id===VIEWING.id); if(f)VIEWING=f;}
+  render();
+}
+async function db(table,op,payload,match){
+  let q=sb.from(table);
+  if(op==="insert")q=q.insert(payload).select();
+  if(op==="update")q=q.update(payload).eq("id",match).select();
+  if(op==="delete")q=q.delete().eq("id",match);
+  if(op==="upsert")q=q.upsert(payload,{onConflict:"employee_id,item_key"}).select();
+  const {data,error}=await q;
+  if(error){toast("Could not save: "+error.message);return null;}
+  return data;
+}
+const empById=id=>D.employees.find(e=>e.id===id);
+const subject=()=>VIEWING||ME;
+
+/* ===================== NAV ===================== */
+function go(v){
+  document.querySelectorAll("[data-view]").forEach(s=>s.classList.toggle("hidden",s.dataset.view!==v));
+  document.querySelectorAll(".nav").forEach(b=>b.classList.toggle("on",b.dataset.v===v));
+  render(); window.scrollTo(0,0);
+}
+document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>go(b.dataset.v));
+window.go=go;
+
+function fillEmpSelect(sel,blank){
+  const s=$(sel); if(!s)return;
+  const cur=s.value;
+  s.innerHTML=(blank?`<option value="">${blank}</option>`:"")+
+    D.employees.map(e=>`<option value="${e.id}">${esc(e.name)}</option>`).join("");
+  s.value=cur;
+}
+function hoursBetween(a,b){
+  if(!a||!b)return 0;
+  const [ah,am]=a.split(":").map(Number),[bh,bm]=b.split(":").map(Number);
+  let m=(bh*60+bm)-(ah*60+am); if(m<0)m+=1440;
+  return Math.round(m/6)/10;
+}
+function csv(name,head,rows){
+  const body=rows.map(r=>r.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(","));
+  const blob=new Blob([head.join(",")+"\n"+body.join("\n")],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+</script>
+
+<script>
+/* ===================== PROFILE ===================== */
+const PMAP={name:"p_name",position:"p_pos",department:"p_dept",emp_no:"p_id",phone:"p_phone",
+ email:"p_email",date_started:"p_start",birth_date:"p_dob",address:"p_addr",emergency_name:"p_ename",
+ emergency_relation:"p_erel",emergency_phone:"p_ephone",sss:"p_sss",philhealth:"p_phic",
+ pagibig:"p_hdmf",tin:"p_tin"};
+function renderProfile(){
+  const e=subject(); if(!e)return;
+  Object.entries(PMAP).forEach(([k,id])=>{const el=$(id); if(el)el.value=e[k]||"";});
+}
+$("saveProfile").onclick=async()=>{
+  const e=subject(); if(!e)return;
+  const patch={};
+  Object.entries(PMAP).forEach(([k,id])=>{const el=$(id); if(el)patch[k]=el.value||null;});
+  const r=await db("employees","update",patch,e.id);
+  if(r){await loadAll();toast("Profile saved.");}
+};
+
+/* ===================== CONTRACT ===================== */
+function renderContract(){
+  const e=subject(); if(!e)return;
+  $("contractRead").innerHTML=`<table>
+    <tr><th style="width:170px">Employment type</th><td><span class="badge ba">${esc(e.employment_type||"—")}</span></td></tr>
+    <tr><th>Status</th><td>${esc(e.status||"Active")}</td></tr>
+    <tr><th>Contract start</th><td>${esc(e.contract_start||e.date_started||"—")}</td></tr>
+    <tr><th>End / regularization</th><td>${esc(e.contract_end||"—")}</td></tr>
+    <tr><th>Work schedule</th><td>${esc(e.schedule||"—")}</td></tr>
+    <tr><th>Reports to</th><td>${esc(e.reports_to||"—")}</td></tr>
+    ${ROLE==="hr"?`<tr><th>Basic monthly rate</th><td class="mono">${e.monthly_rate?peso(e.monthly_rate):"—"}</td></tr>`:""}
+  </table>`;
+  $("c_type").value=e.employment_type||"Independent contractor";
+  $("c_status").value=e.status||"Active";
+  $("c_start").value=e.contract_start||"";
+  $("c_end").value=e.contract_end||"";
+  $("c_rate").value=e.monthly_rate||"";
+  $("c_sched").value=e.schedule||"";
+  $("c_purpose").value=e.role_purpose||"";
+  $("c_duties").value=e.duties||"";
+  $("c_reports").value=e.reports_to||"";
+  const ro=ROLE!=="hr";
+  ["c_purpose","c_duties","c_reports"].forEach(i=>$(i).readOnly=ro);
+  $("saveJD").classList.toggle("hidden",ro);
+}
+$("saveContract").onclick=async()=>{
+  const e=subject();
+  const r=await db("employees","update",{employment_type:$("c_type").value,status:$("c_status").value,
+    contract_start:$("c_start").value||null,contract_end:$("c_end").value||null,
+    monthly_rate:$("c_rate").value||null,schedule:$("c_sched").value},e.id);
+  if(r){await loadAll();toast("Contract updated.");}
+};
+$("saveJD").onclick=async()=>{
+  const e=subject();
+  const r=await db("employees","update",{role_purpose:$("c_purpose").value,
+    duties:$("c_duties").value,reports_to:$("c_reports").value},e.id);
+  if(r){await loadAll();toast("Job description saved.");}
+};
+
+/* ===================== TIME LOG ===================== */
+setInterval(()=>{
+  const c=$("liveClock"); if(!c)return;
+  const d=new Date();
+  c.textContent=d.toTimeString().slice(0,5);
+  $("liveDate").textContent=d.toLocaleDateString("en-PH",
+    {weekday:"long",day:"numeric",month:"long",year:"numeric"});
+},1000);
+
+const openEntry=()=>D.logs.find(l=>l.employee_id===ME.id&&!l.time_out);
+function renderClock(){
+  const open=openEntry();
+  $("clockState").innerHTML=open?`<span class="badge b1">Logged in since ${esc(open.time_in.slice(0,5))}</span>`
+    :`<span class="badge bg">Not logged in</span>`;
+  $("inBtn").disabled=!!open; $("outBtn").disabled=!open;
+  $("inBtn").style.opacity=open?.45:1; $("outBtn").style.opacity=open?1:.45;
+  $("clockNote").textContent=open?"Remember to log out at the end of your shift.":"";
+  const mine=D.logs.filter(l=>l.employee_id===ME.id).slice(0,14);
+  $("myLogRows").innerHTML=mine.length?mine.map(l=>
+    `<tr><td>${esc(l.log_date)}</td><td>${esc((l.time_in||"").slice(0,5))}</td>
+     <td>${l.time_out?esc(l.time_out.slice(0,5)):"—"}</td>
+     <td class="right mono">${l.time_out?Number(l.hours).toFixed(1):"—"}</td></tr>`).join("")
+    :`<tr><td colspan="4" class="empty">No entries yet.</td></tr>`;
+}
+$("inBtn").onclick=async()=>{
+  if(openEntry()){toast("You are already logged in.");return;}
+  const r=await db("time_logs","insert",{employee_id:ME.id,log_date:today(),
+    time_in:new Date().toTimeString().slice(0,8)});
+  if(r)await loadAll();
+};
+$("outBtn").onclick=async()=>{
+  const o=openEntry(); if(!o){toast("You are not logged in.");return;}
+  const out=new Date().toTimeString().slice(0,8);
+  const hrs=hoursBetween(o.time_in.slice(0,5),out.slice(0,5));
+  const r=await db("time_logs","update",{time_out:out,hours:hrs},o.id);
+  if(r){await loadAll();toast(`Logged out. ${hrs.toFixed(1)} hours recorded.`);}
+};
+
+/* ===================== LEAVE ===================== */
+const ENTITLE={Vacation:15,Sick:15,Emergency:5,Bereavement:3};
+const leaveUsed=(id,t)=>D.leave.filter(l=>l.employee_id===id&&l.leave_type===t&&l.status==="Approved")
+  .reduce((a,b)=>a+Number(b.days||0),0);
+function renderLeave(){
+  const e=ME;
+  $("leaveTiles").innerHTML=Object.entries(ENTITLE).map(([t,n])=>
+    `<div class="tile"><div class="n">${n-leaveUsed(e.id,t)}</div><div class="l">${t} left of ${n}</div></div>`).join("")+
+    `<div class="tile"><div class="n">${D.leave.filter(l=>l.employee_id===e.id&&l.status==="Pending").length}</div>
+     <div class="l">Pending requests</div></div>`;
+  const mine=D.leave.filter(l=>l.employee_id===e.id);
+  $("myLeaveRows").innerHTML=mine.length?mine.map(l=>{
+    const c=l.status==="Approved"?"b1":l.status==="Declined"?"b4":"bg";
+    return `<tr><td>${esc(l.leave_type)}</td><td>${esc(l.date_from)} → ${esc(l.date_to)}</td>
+      <td class="mono">${esc(l.days)}</td><td><span class="badge ${c}">${esc(l.status)}</span></td></tr>`;
+  }).join(""):`<tr><td colspan="4" class="empty">No requests yet.</td></tr>`;
+}
+$("submitLeave").onclick=async()=>{
+  const from=$("l_from").value,to=$("l_to").value,days=Number($("l_days").value);
+  if(!from||!to){toast("Enter both a start and end date.");return;}
+  if(to<from){toast("The end date cannot be before the start date.");return;}
+  if(!days||days<=0){toast("Enter the number of days.");return;}
+  const r=await db("leave_requests","insert",{employee_id:ME.id,leave_type:$("l_type").value,
+    date_from:from,date_to:to,days,reason:$("l_reason").value,status:"Pending"});
+  if(r){$("l_reason").value="";await loadAll();toast("Request submitted for approval.");}
+};
+
+/* ===================== ONBOARDING ===================== */
+function renderOnboard(){
+  const e=subject(); if(!e)return;
+  const mine=D.onboarding.filter(o=>o.employee_id===e.id);
+  const isDone=k=>!!(mine.find(o=>o.item_key===k)||{}).done;
+  const draw=(arr,pre)=>arr.map((t,i)=>{
+    const k=pre+i;
+    return `<label class="chk ${isDone(k)?'done':''}">
+      <input type="checkbox" data-onb="${k}" ${isDone(k)?"checked":""}><span>${esc(t)}</span></label>`;
+  }).join("");
+  $("onbDocs").innerHTML=draw(ONB_DOCS,"d");
+  $("onbSetup").innerHTML=draw(ONB_SETUP,"s");
+  const total=ONB_DOCS.length+ONB_SETUP.length;
+  const done=mine.filter(o=>o.done).length;
+  $("onbBar").style.width=Math.round(done/total*100)+"%";
+  $("onbPct").textContent=`${done} of ${total} complete — ${Math.round(done/total*100)}%`;
+  document.querySelectorAll("[data-onb]").forEach(cb=>cb.onchange=async()=>{
+    await db("onboarding_items","upsert",
+      {employee_id:e.id,item_key:cb.dataset.onb,done:cb.checked});
+    await loadAll();
+  });
+}
+
+/* ===================== DELIVERABLES ===================== */
+function renderDeliv(){
+  fillEmpSelect("d_who",null);
+  const list=ROLE==="hr"?D.deliverables:D.deliverables.filter(d=>d.employee_id===ME.id);
+  $("delivRows").innerHTML=list.length?list.map(d=>{
+    const p={Normal:"bg",High:"b2",Critical:"b4"}[d.priority]||"bg";
+    const late=d.due_date&&d.due_date<today()&&d.status!=="Done";
+    const who=ROLE==="hr"?`<br><span class="note">${esc((empById(d.employee_id)||{}).name||"—")}</span>`:"";
+    return `<tr><td><strong>${esc(d.title)}</strong>${who}
+      ${d.description?`<br><span class="note">${esc(d.description)}</span>`:""}</td>
+      <td>${esc(d.due_date||"—")}${late?`<br><span class="badge b4">Overdue</span>`:""}</td>
+      <td><span class="badge ${p}">${esc(d.priority)}</span></td>
+      <td><select data-dst="${d.id}" style="padding:4px">
+        ${["Not started","In progress","For review","Done"].map(s=>
+          `<option ${d.status===s?"selected":""}>${s}</option>`).join("")}</select></td>
+      <td>${ROLE==="hr"?`<button class="btn g small" data-ddel="${d.id}">Remove</button>`:""}</td></tr>`;
+  }).join(""):`<tr><td colspan="5" class="empty">Nothing assigned yet.</td></tr>`;
+  document.querySelectorAll("[data-dst]").forEach(s=>s.onchange=async()=>{
+    await db("deliverables","update",{status:s.value},s.dataset.dst); await loadAll();
+  });
+  document.querySelectorAll("[data-ddel]").forEach(b=>b.onclick=async()=>{
+    if(!confirm("Remove this deliverable?"))return;
+    await db("deliverables","delete",null,b.dataset.ddel); await loadAll();
+  });
+}
+$("addDeliv").onclick=async()=>{
+  const t=$("d_title").value.trim();
+  if(!t){toast("Give the deliverable a title.");return;}
+  const emp=ROLE==="hr"?($("d_who").value||ME.id):ME.id;
+  const r=await db("deliverables","insert",{employee_id:emp,title:t,description:$("d_desc").value,
+    due_date:$("d_due").value||null,priority:$("d_pri").value,status:"Not started"});
+  if(r){["d_title","d_desc","d_due"].forEach(i=>$(i).value="");await loadAll();toast("Deliverable added.");}
+};
+</script>
+
+<script>
+/* ===================== DIRECTORY ===================== */
+$("newEmpBtn").onclick=()=>$("newEmpCard").classList.remove("hidden");
+$("cancelEmp").onclick=()=>$("newEmpCard").classList.add("hidden");
+$("createEmp").onclick=async()=>{
+  const n=$("n_name").value.trim();
+  if(!n){toast("Enter the employee's name.");return;}
+  const r=await db("employees","insert",{name:n,position:$("n_pos").value,department:$("n_dept").value,
+    employment_type:$("n_type").value,date_started:$("n_start").value||null,
+    contract_start:$("n_start").value||null,monthly_rate:$("n_rate").value||null,status:"Active"});
+  if(r){
+    ["n_name","n_pos","n_dept","n_start","n_rate"].forEach(i=>$(i).value="");
+    $("newEmpCard").classList.add("hidden");
+    await loadAll();
+    toast(n+" added. To give them a login, use Invite below their row.");
+  }
+};
+function renderDir(){
+  const q=($("dirSearch").value||"").toLowerCase(),f=$("dirFilter").value;
+  const rows=D.employees.filter(e=>(!f||e.employment_type===f)&&
+    ((e.name||"")+(e.position||"")+(e.department||"")).toLowerCase().includes(q));
+  $("dirRows").innerHTML=rows.length?rows.map(e=>{
+    const sc={Active:"b1","On leave":"b2",Separated:"bg"}[e.status||"Active"];
+    return `<tr><td><strong>${esc(e.name)}</strong>${e.is_hr?' <span class="badge ba">HR</span>':""}
+        ${e.user_id?"":'<br><span class="note">No login yet</span>'}</td>
+      <td>${esc(e.position)}</td><td>${esc(e.department)}</td>
+      <td><span class="badge ba">${esc(e.employment_type)}</span></td>
+      <td>${esc(e.date_started||"—")}</td>
+      <td><span class="badge ${sc}">${esc(e.status||"Active")}</span></td>
+      <td><button class="btn g small" data-open="${e.id}">Open file</button>
+          <button class="btn g small" data-rm="${e.id}">Remove</button></td></tr>`;
+  }).join(""):`<tr><td colspan="7" class="empty">No matching records.</td></tr>`;
+  document.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>{
+    VIEWING=empById(b.dataset.open);
+    $("whoRole").textContent="Viewing file: "+VIEWING.name;
+    go("profile");
+  });
+  document.querySelectorAll("[data-rm]").forEach(b=>b.onclick=async()=>{
+    const e=empById(b.dataset.rm);
+    if(e.id===ME.id){toast("You cannot remove your own record.");return;}
+    if(!confirm(`Remove ${e.name} and all their records? This cannot be undone.`))return;
+    await db("employees","delete",null,e.id);
+    if(VIEWING&&VIEWING.id===e.id)VIEWING=ME;
+    await loadAll();
+  });
+}
+$("dirSearch").oninput=renderDir; $("dirFilter").onchange=renderDir;
+$("expEmp").onclick=()=>csv("discover-employees.csv",
+  ["Name","Position","Department","Type","Status","Started","Schedule","Reports to","Email","Mobile"],
+  D.employees.map(e=>[e.name,e.position,e.department,e.employment_type,e.status,
+    e.date_started,e.schedule,e.reports_to,e.email,e.phone]));
+
+/* ===================== APPROVALS ===================== */
+function renderApprovals(){
+  const pend=D.leave.filter(l=>l.status==="Pending");
+  $("appRows").innerHTML=pend.length?pend.map(l=>{
+    const e=empById(l.employee_id)||{};
+    return `<tr><td><strong>${esc(e.name)}</strong><br><span class="note">${esc(e.department||"")}</span></td>
+      <td>${esc(l.leave_type)}</td><td>${esc(l.date_from)} → ${esc(l.date_to)}</td>
+      <td class="mono">${esc(l.days)}</td><td>${esc(l.reason||"—")}</td>
+      <td><button class="btn small a" data-ok="${l.id}">Approve</button>
+          <button class="btn small d" data-no="${l.id}">Decline</button></td></tr>`;
+  }).join(""):`<tr><td colspan="6" class="empty">Nothing pending.</td></tr>`;
+  const done=D.leave.filter(l=>l.status!=="Pending");
+  $("appDone").innerHTML=done.length?done.map(l=>{
+    const e=empById(l.employee_id)||{},c=l.status==="Approved"?"b1":"b4";
+    return `<tr><td>${esc(e.name)}</td><td>${esc(l.leave_type)}</td>
+      <td>${esc(l.date_from)} → ${esc(l.date_to)}</td><td class="mono">${esc(l.days)}</td>
+      <td><span class="badge ${c}">${esc(l.status)}</span></td></tr>`;
+  }).join(""):`<tr><td colspan="5" class="empty">No decisions yet.</td></tr>`;
+  document.querySelectorAll("[data-ok]").forEach(b=>b.onclick=()=>decide(b.dataset.ok,"Approved"));
+  document.querySelectorAll("[data-no]").forEach(b=>b.onclick=()=>decide(b.dataset.no,"Declined"));
+}
+async function decide(id,st){
+  await db("leave_requests","update",{status:st,decided_on:today()},id); await loadAll();
+}
+
+/* ===================== ATTENDANCE ===================== */
+function renderAtt(){
+  fillEmpSelect("attEmp","All employees");
+  const e=$("attEmp").value,d=$("attDate").value;
+  const rows=D.logs.filter(l=>(!e||l.employee_id===e)&&(!d||l.log_date===d));
+  $("attRows").innerHTML=rows.length?rows.map(l=>{
+    const w=empById(l.employee_id)||{};
+    return `<tr><td>${esc(l.log_date)}</td><td>${esc(w.name)}</td>
+      <td>${esc((l.time_in||"").slice(0,5))}</td><td>${l.time_out?esc(l.time_out.slice(0,5)):"—"}</td>
+      <td class="right mono">${l.time_out?Number(l.hours).toFixed(1):"open"}</td></tr>`;
+  }).join(""):`<tr><td colspan="5" class="empty">No entries match.</td></tr>`;
+}
+$("attEmp").onchange=renderAtt; $("attDate").onchange=renderAtt;
+$("attClear").onclick=()=>{$("attEmp").value="";$("attDate").value="";renderAtt();};
+$("expAtt").onclick=()=>csv("discover-attendance.csv",["Date","Employee","In","Out","Hours"],
+  D.logs.map(l=>[l.log_date,(empById(l.employee_id)||{}).name,l.time_in,l.time_out,l.hours]));
+
+/* ===================== PAYROLL ===================== */
+const payDraft={};
+function renderPay(){
+  const act=D.employees.filter(e=>e.status!=="Separated");
+  $("payRows").innerHTML=act.length?act.map(e=>{
+    const d=payDraft[e.id]||(payDraft[e.id]={ot:0,allow:0,sss:0,phic:0,hdmf:0,tax:0,other:0});
+    const f=k=>`<td><input type="number" data-pay="${e.id}" data-k="${k}" value="${d[k]||0}" style="width:88px;padding:5px"></td>`;
+    return `<tr><td><strong>${esc(e.name)}</strong><br><span class="note">${esc(e.position||"")}</span></td>
+      <td class="mono">${peso(e.monthly_rate||0)}</td>
+      ${f("ot")}${f("allow")}${f("sss")}${f("phic")}${f("hdmf")}${f("tax")}${f("other")}
+      <td class="right mono" data-net="${e.id}">${peso(netOf(e))}</td></tr>`;
+  }).join(""):`<tr><td colspan="10" class="empty">No employees on record.</td></tr>`;
+  document.querySelectorAll("[data-pay]").forEach(i=>i.oninput=()=>{
+    payDraft[i.dataset.pay][i.dataset.k]=Number(i.value)||0;
+    document.querySelector(`[data-net="${i.dataset.pay}"]`).textContent=peso(netOf(empById(i.dataset.pay)));
+    payTotal();
+  });
+  payTotal();
+}
+function netOf(e){
+  const d=payDraft[e.id]||{};
+  return (Number(e.monthly_rate)||0)+(+d.ot||0)+(+d.allow||0)
+    -((+d.sss||0)+(+d.phic||0)+(+d.hdmf||0)+(+d.tax||0)+(+d.other||0));
+}
+function payTotal(){
+  $("payTotal").textContent=peso(D.employees.filter(e=>e.status!=="Separated")
+    .reduce((a,e)=>a+netOf(e),0));
+}
+$("savePay").onclick=async()=>{
+  const p=$("pr_period").value.trim();
+  if(!p){toast("Enter the cut-off period.");return;}
+  const act=D.employees.filter(e=>e.status!=="Separated");
+  const r=await db("payroll_runs","insert",{period:p,pay_date:$("pr_date").value||null,
+    headcount:act.length,total_net:act.reduce((a,e)=>a+netOf(e),0),
+    lines:act.map(e=>({name:e.name,basic:e.monthly_rate,...payDraft[e.id],net:netOf(e)}))});
+  if(r){await loadAll();toast("Payroll run saved.");}
+};
+function renderPayHist(){
+  $("payHist").innerHTML=D.payruns.length?D.payruns.map(r=>
+    `<tr><td>${esc(r.period)}</td><td>${esc(r.pay_date||"—")}</td><td class="mono">${r.headcount}</td>
+     <td class="right mono">${peso(r.total_net)}</td>
+     <td><button class="btn g small" data-prm="${r.id}">Remove</button></td></tr>`).join("")
+    :`<tr><td colspan="5" class="empty">No saved runs.</td></tr>`;
+  document.querySelectorAll("[data-prm]").forEach(b=>b.onclick=async()=>{
+    if(!confirm("Remove this payroll run?"))return;
+    await db("payroll_runs","delete",null,b.dataset.prm); await loadAll();
+  });
+}
+$("expPay").onclick=()=>{
+  const act=D.employees.filter(e=>e.status!=="Separated");
+  csv("discover-payroll.csv",
+    ["Employee","Position","Basic","OT","Allowance","SSS","PhilHealth","Pag-IBIG","Tax","Other","Net"],
+    act.map(e=>{const d=payDraft[e.id]||{};
+      return [e.name,e.position,e.monthly_rate,d.ot,d.allow,d.sss,d.phic,d.hdmf,d.tax,d.other,netOf(e)];}));
+};
+
+/* ===================== COMPLIANCE ===================== */
+$("addComp").onclick=async()=>{
+  const emp=$("k_emp").value;
+  if(!emp){toast("Select the employee this record concerns.");return;}
+  if(!$("k_desc").value.trim()){toast("Describe the incident before filing.");return;}
+  const r=await db("compliance_records","insert",{employee_id:emp,record_type:$("k_type").value,
+    incident_date:$("k_date").value||today(),severity:$("k_sev").value,reported_by:$("k_by").value,
+    policy_ref:$("k_pol").value,description:$("k_desc").value,action_required:$("k_act").value,
+    response_due:$("k_due").value||null,status:$("k_status").value});
+  if(r){["k_desc","k_act","k_by","k_pol"].forEach(i=>$(i).value="");
+    await loadAll();toast("Record filed to the confidential file.");}
+};
+function renderComp(){
+  fillEmpSelect("k_emp","— Select employee —");
+  fillEmpSelect("compFilter","All employees");
+  let open=0,ntr=0,warn=0;
+  D.compliance.forEach(c=>{
+    if(c.status!=="Resolved")open++;
+    if(c.record_type==="Notice to explain")ntr++;
+    if((c.record_type||"").includes("warning"))warn++;
+  });
+  $("compTiles").innerHTML=`
+    <div class="tile"><div class="n">${D.compliance.length}</div><div class="l">Total records</div></div>
+    <div class="tile"><div class="n" style="color:var(--high)">${open}</div><div class="l">Open matters</div></div>
+    <div class="tile"><div class="n" style="color:var(--mod)">${ntr}</div><div class="l">Notices to explain</div></div>
+    <div class="tile"><div class="n" style="color:var(--crit)">${warn}</div><div class="l">Warnings issued</div></div>`;
+  const f=$("compFilter").value;
+  const rows=D.compliance.filter(c=>!f||c.employee_id===f);
+  $("compRows").innerHTML=rows.length?rows.map(c=>{
+    const e=empById(c.employee_id)||{};
+    const sc={Minor:"bg",Serious:"b2",Grave:"b4"}[c.severity];
+    return `<tr><td>${esc(c.incident_date)}</td><td><strong>${esc(e.name)}</strong></td>
+      <td>${esc(c.record_type)}${c.policy_ref?`<br><span class="note">${esc(c.policy_ref)}</span>`:""}
+        <br><span class="note">${esc((c.description||"").slice(0,90))}${(c.description||"").length>90?"…":""}</span></td>
+      <td><span class="badge ${sc}">${esc(c.severity)}</span></td>
+      <td><select data-cst="${c.id}" style="padding:4px">
+        ${["Open","Awaiting response","Response received","Resolved","Escalated"].map(s=>
+          `<option ${c.status===s?"selected":""}>${s}</option>`).join("")}</select>
+        ${c.response_due?`<br><span class="note">Due ${esc(c.response_due)}</span>`:""}</td>
+      <td><button class="btn g small" data-crm="${c.id}">Remove</button></td></tr>`;
+  }).join(""):`<tr><td colspan="6" class="empty">No records filed.</td></tr>`;
+  document.querySelectorAll("[data-cst]").forEach(s=>s.onchange=async()=>{
+    await db("compliance_records","update",{status:s.value},s.dataset.cst); await loadAll();
+  });
+  document.querySelectorAll("[data-crm]").forEach(b=>b.onclick=async()=>{
+    if(!confirm("Remove this record permanently?"))return;
+    await db("compliance_records","delete",null,b.dataset.crm); await loadAll();
+  });
+}
+$("compFilter").onchange=renderComp;
+
+/* ===================== ASSESSMENT ===================== */
+function buildQuestions(){
+  $("qlist").innerHTML=Q.map(q=>`<div class="qrow">
+    <div><div>${q.t}</div><div class="note mono">+${q.p} if yes</div></div>
+    <div class="toggle" data-k="${q.k}"><button class="yes" data-v="1">Yes</button>
+      <button class="no" data-v="0">No</button></div></div>`).join("");
+  document.querySelectorAll(".toggle").forEach(t=>t.onclick=e=>{
+    if(e.target.tagName!=="BUTTON")return;
+    ans[t.dataset.k]=+e.target.dataset.v;
+    t.querySelectorAll("button").forEach(b=>b.classList.remove("on"));
+    e.target.classList.add("on"); score();
+  });
+}
+function level(s){
+  if(s<=20)return{n:"Low",c:"b1",t:"Probationary",
+    a:"Probationary employment — 6-month written contract with written KPIs and DOLE-compliant onboarding."};
+  if(s<=45)return{n:"Moderate",c:"b2",t:"Review first",
+    a:"Legal review required. Either transition directly to regular employment, or use probation with strong documentation and written acknowledgment that employment begins on the transition date."};
+  if(s<=70)return{n:"High",c:"b3",t:"Regular",
+    a:"Do not place under probation. Transition directly as a regular employee."};
+  return{n:"Critical",c:"b4",t:"Regular (existing)",
+    a:"Treat as an existing regular employee. Do not impose probation."};
+}
+function score(){
+  let s=0; Q.forEach(q=>{if(ans[q.k])s+=q.p});
+  const L=level(s);
+  $("scoreNum").textContent=s;
+  $("scoreBadge").innerHTML=`<span class="badge ${L.c}">${L.n} risk</span>`;
+  $("scoreHint").textContent=`${Object.keys(ans).length} of ${Q.length} factors answered`;
+  $("recBox").innerHTML=`<strong>${L.n} risk — ${s} points.</strong> ${L.a}`;
+  return s;
+}
+$("a_emp").onchange=()=>{
+  const e=empById($("a_emp").value); if(!e)return;
+  $("a_name").value=e.name; $("a_pos").value=e.position||"";
+  if(e.date_started)$("a_years").value=((Date.now()-new Date(e.date_started))/31557600000).toFixed(1);
+  $("a_sup").value=e.reports_to||"";
+};
+$("saveAssess").onclick=async()=>{
+  const n=$("a_name").value.trim();
+  if(!n){toast("Enter the worker's name.");return;}
+  if(Object.keys(ans).length<Q.length&&!confirm("Not every factor is answered. Save anyway?"))return;
+  const s=score(),L=level(s);
+  const r=await db("assessments","insert",{employee_id:$("a_emp").value||null,name:n,
+    position:$("a_pos").value,years:$("a_years").value||null,payment_basis:$("a_pay").value,
+    agreement_signed:$("a_agr").value,supervisor:$("a_sup").value,assessed_by:$("a_by").value,
+    answers:ans,score:s,risk:L.n,transition_path:L.t,action:L.a,notes:$("a_notes").value});
+  if(r){clearAssess();await loadAll();toast(`${n} saved — ${L.n} risk, ${s} points.`);}
+};
+function clearAssess(){
+  ["a_name","a_pos","a_years","a_sup","a_by","a_notes"].forEach(i=>$(i).value="");
+  $("a_emp").value="";
+  Object.keys(ans).forEach(k=>delete ans[k]);
+  document.querySelectorAll(".toggle button").forEach(b=>b.classList.remove("on"));
+  score();
+}
+$("clearAssess").onclick=clearAssess;
+$("expAssess").onclick=()=>csv("discover-transition-assessments.csv",
+  ["Name","Position","Years","Payment","Agreement","Supervisor","Score","Risk","Transition","Assessed by","Date","Notes"],
+  D.assessments.map(a=>[a.name,a.position,a.years,a.payment_basis,a.agreement_signed,a.supervisor,
+    a.score,a.risk,a.transition_path,a.assessed_by,a.assessed_on,a.notes]));
+function renderAssess(){
+  fillEmpSelect("a_emp","— New / unlisted worker —");
+  const c={Low:0,Moderate:0,High:0,Critical:0};
+  D.assessments.forEach(a=>{if(c[a.risk]!==undefined)c[a.risk]++});
+  $("asTiles").innerHTML=`
+    <div class="tile"><div class="n">${D.assessments.length}</div><div class="l">Assessed</div></div>
+    <div class="tile"><div class="n" style="color:var(--low)">${c.Low}</div><div class="l">Low · probationary</div></div>
+    <div class="tile"><div class="n" style="color:var(--mod)">${c.Moderate}</div><div class="l">Moderate · review</div></div>
+    <div class="tile"><div class="n" style="color:var(--high)">${c.High}</div><div class="l">High · regular</div></div>
+    <div class="tile"><div class="n" style="color:var(--crit)">${c.Critical}</div><div class="l">Critical · already regular</div></div>`;
+  $("asRows").innerHTML=D.assessments.length?D.assessments.map(a=>{
+    const L=level(a.score);
+    return `<tr><td><strong>${esc(a.name)}</strong><br><span class="note">${esc(a.assessed_on)}</span></td>
+      <td>${esc(a.position)}</td><td class="mono">${esc(a.years)}</td>
+      <td class="mono"><strong>${a.score}</strong></td>
+      <td><span class="badge ${L.c}">${esc(a.risk)}</span></td><td>${esc(a.transition_path)}</td>
+      <td><button class="btn g small" data-arm="${a.id}">Remove</button></td></tr>`;
+  }).join(""):`<tr><td colspan="7" class="empty">No assessments yet.</td></tr>`;
+  document.querySelectorAll("[data-arm]").forEach(b=>b.onclick=async()=>{
+    if(!confirm("Remove this assessment?"))return;
+    await db("assessments","delete",null,b.dataset.arm); await loadAll();
+  });
+}
+
+/* ===================== DASHBOARD ===================== */
+function renderDash(){
+  if(ROLE==="hr"){
+    $("dashHi").textContent="HR dashboard";
+    $("dashSub").textContent="Company-wide status across attendance, leave, compliance and contractor transition.";
+    const pend=D.leave.filter(l=>l.status==="Pending").length;
+    const openLogs=D.logs.filter(l=>!l.time_out).length;
+    const openComp=D.compliance.filter(c=>c.status!=="Resolved").length;
+    const contractors=D.employees.filter(e=>e.employment_type==="Independent contractor").length;
+    $("dashTiles").innerHTML=`
+      <div class="tile"><div class="n">${D.employees.length}</div><div class="l">On record</div></div>
+      <div class="tile"><div class="n" style="color:var(--accent2)">${openLogs}</div><div class="l">Currently logged in</div></div>
+      <div class="tile"><div class="n" style="color:var(--mod)">${pend}</div><div class="l">Leave pending</div></div>
+      <div class="tile"><div class="n" style="color:var(--high)">${openComp}</div><div class="l">Open compliance</div></div>
+      <div class="tile"><div class="n" style="color:var(--lock)">${contractors}</div><div class="l">Contractors</div></div>`;
+    const inToday=D.logs.filter(l=>l.log_date===today());
+    $("dashToday").innerHTML=inToday.length?`<table><tbody>${inToday.map(l=>
+      `<tr><td>${esc((empById(l.employee_id)||{}).name)}</td><td>${esc((l.time_in||"").slice(0,5))}</td>
+       <td>${l.time_out?esc(l.time_out.slice(0,5)):`<span class="badge b1">In</span>`}</td></tr>`).join("")}</tbody></table>`
+      :`<p class="empty">Nobody has logged in today.</p>`;
+    const items=[];
+    if(pend)items.push(`${pend} leave request${pend>1?"s":""} awaiting a decision`);
+    if(openComp)items.push(`${openComp} compliance matter${openComp>1?"s":""} still open`);
+    const noLogin=D.employees.filter(e=>!e.user_id).length;
+    if(noLogin)items.push(`${noLogin} employee${noLogin>1?"s have":" has"} no login yet`);
+    const unassessed=D.employees.filter(e=>e.employment_type==="Independent contractor"&&
+      !D.assessments.some(a=>a.employee_id===e.id)).length;
+    if(unassessed)items.push(`${unassessed} contractor${unassessed>1?"s have":" has"} no transition assessment`);
+    const overdue=D.deliverables.filter(d=>d.due_date&&d.due_date<today()&&d.status!=="Done").length;
+    if(overdue)items.push(`${overdue} deliverable${overdue>1?"s are":" is"} overdue`);
+    $("dashAttn").innerHTML=items.length?`<ul style="margin:0;padding-left:18px">${
+      items.map(i=>`<li style="margin-bottom:6px">${i}</li>`).join("")}</ul>`
+      :`<p class="empty">Nothing needs attention.</p>`;
+  }else{
+    $("dashHi").textContent="Welcome, "+(ME.name||"").split(" ")[0];
+    $("dashSub").textContent=(ME.position||"")+(ME.department?" · "+ME.department:"");
+    const mineOnb=D.onboarding.filter(o=>o.employee_id===ME.id&&o.done).length;
+    const total=ONB_DOCS.length+ONB_SETUP.length;
+    const myDel=D.deliverables.filter(d=>d.employee_id===ME.id&&d.status!=="Done").length;
+    $("dashTiles").innerHTML=`
+      <div class="tile"><div class="n">${ENTITLE.Vacation-leaveUsed(ME.id,"Vacation")}</div><div class="l">Vacation days left</div></div>
+      <div class="tile"><div class="n">${ENTITLE.Sick-leaveUsed(ME.id,"Sick")}</div><div class="l">Sick days left</div></div>
+      <div class="tile"><div class="n">${myDel}</div><div class="l">Open deliverables</div></div>
+      <div class="tile"><div class="n">${Math.round(mineOnb/total*100)}%</div><div class="l">Onboarding complete</div></div>`;
+    const open=openEntry();
+    const mine=D.logs.filter(l=>l.employee_id===ME.id&&l.log_date===today());
+    $("dashToday").innerHTML=`<p>${open?`You logged in at <strong>${esc(open.time_in.slice(0,5))}</strong>.`:
+      mine.length?"You have logged out for today.":"You have not logged in yet today."}</p>
+      <div class="row"><button class="btn g small" onclick="go('clock')">Go to time log</button></div>`;
+    const items=[];
+    const due=D.deliverables.filter(d=>d.employee_id===ME.id&&d.due_date&&d.due_date<today()&&d.status!=="Done").length;
+    if(due)items.push(`${due} deliverable${due>1?"s are":" is"} past its due date`);
+    if(mineOnb<total)items.push(`${total-mineOnb} onboarding item${total-mineOnb>1?"s":""} still outstanding`);
+    const p=D.leave.filter(l=>l.employee_id===ME.id&&l.status==="Pending").length;
+    if(p)items.push(`${p} leave request${p>1?"s":""} awaiting approval`);
+    $("dashAttn").innerHTML=items.length?`<ul style="margin:0;padding-left:18px">${
+      items.map(i=>`<li style="margin-bottom:6px">${i}</li>`).join("")}</ul>`
+      :`<p class="empty">You are all caught up.</p>`;
+  }
+}
+
+/* ===================== RENDER & BOOT ===================== */
+function render(){
+  try{
+    renderDash(); renderProfile(); renderContract(); renderClock();
+    renderLeave(); renderOnboard(); renderDeliv();
+    if(ROLE==="hr"){renderDir();renderApprovals();renderAtt();renderPay();
+      renderPayHist();renderComp();renderAssess();}
+  }catch(err){console.error(err);}
+}
+(async function boot(){
+  const {data:{session}}=await sb.auth.getSession();
+  if(session) await afterLogin(); else showLogin();
+})();
+</script>
+</body>
+</html>
