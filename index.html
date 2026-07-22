@@ -104,10 +104,13 @@ tr:hover td{background:var(--soft)}
 @media(max-width:760px){#app.on{grid-template-columns:1fr}aside{position:static;height:auto}main{padding:18px}}
 
 .pwwrap{position:relative}
-.pwwrap input{padding-right:62px!important}
-.pwtog{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;
-  color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;padding:4px 6px;letter-spacing:.04em}
-.pwtog:hover{color:var(--ink)}
+.pwwrap input{padding-right:64px!important}
+.loginbox .pwtog,.pwtog{position:absolute!important;right:4px!important;top:50%!important;
+  transform:translateY(-50%)!important;width:auto!important;margin:0!important;
+  background:none!important;border:none!important;color:var(--muted)!important;
+  font-size:12px!important;font-weight:600!important;cursor:pointer;
+  padding:6px 8px!important;letter-spacing:.04em;line-height:1!important}
+.loginbox .pwtog:hover{color:var(--ink)!important}
 .msg{padding:10px 12px;font-size:13px;margin-top:14px;border-left:3px solid}
 .msg.err{background:#fdf0f0;border-color:var(--crit);color:#7d1a24}
 .msg.ok{background:#eef7f2;border-color:var(--low);color:#1d5340}
