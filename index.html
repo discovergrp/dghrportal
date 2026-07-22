@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Discover Group — HR Portal</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 
 :root{
@@ -180,10 +181,13 @@ tr:hover td{background:var(--soft)}
     <button class="nav" data-v="leave">Leave</button>
     <button class="nav" data-v="onboard">Onboarding</button>
     <button class="nav" data-v="deliver">Deliverables</button>
+    <button class="nav" data-v="myperf">My performance</button>
+    <button class="nav" data-v="myrecords">My records</button>
     <div class="navgrp hrOnly">HR administration</div>
     <button class="nav hrOnly" data-v="directory">Employee directory</button>
     <button class="nav hrOnly" data-v="approvals">Leave approvals</button>
     <button class="nav hrOnly" data-v="attendance">Attendance register</button>
+    <button class="nav hrOnly" data-v="hrperf">Performance reviews</button>
     <button class="nav hrOnly" data-v="payroll">Payroll sheet <span class="lk">◆</span></button>
     <button class="nav hrOnly" data-v="compliance">Compliance file <span class="lk">◆</span></button>
     <button class="nav hrOnly" data-v="assess">Transition assessment</button>
@@ -219,6 +223,8 @@ tr:hover td{background:var(--soft)}
           <div><label>Email</label><input type="text" id="p_email"></div>
           <div><label>Date started</label><input type="date" id="p_start"></div>
           <div><label>Birth date</label><input type="date" id="p_dob"></div>
+          <div class="hrOnly"><label>Name on biometric device</label>
+            <input type="text" id="p_bio" placeholder="Only if different from above"></div>
         </div>
         <h4>Address</h4>
         <textarea id="p_addr" rows="2"></textarea>
@@ -417,6 +423,51 @@ tr:hover td{background:var(--soft)}
       </div>
     </section>
 
+    <!-- MY PERFORMANCE (employee) -->
+    <section data-view="myperf" class="hidden">
+      <div class="head"><div><h2>My performance</h2>
+        <p>Reviews your supervisor has shared with you. Add your own assessment after reading theirs.</p></div></div>
+      <div id="myPerfList"></div>
+    </section>
+
+    <!-- MY RECORDS (employee) -->
+    <section data-view="myrecords" class="hidden">
+      <div class="head"><div><h2>My records</h2>
+        <p>Formal records issued to you. You may write a response to each one.</p></div></div>
+      <div id="myRecList"></div>
+    </section>
+
+    <!-- PERFORMANCE REVIEWS (HR) -->
+    <section data-view="hrperf" class="hidden">
+      <div class="head"><div><h2>Performance reviews</h2>
+        <p>Supervisor assessment first, then the employee adds their own. Release a review to let the employee see it.</p></div></div>
+      <div class="tiles" id="perfTiles"></div>
+      <div class="card">
+        <h3>New review</h3>
+        <div class="grid">
+          <div><label>Employee</label><select id="v_emp"></select></div>
+          <div><label>Review period</label><input type="text" id="v_period" placeholder="e.g. H1 2026"></div>
+          <div><label>Reviewer / supervisor</label><input type="text" id="v_reviewer"></div>
+          <div><label>Review date</label><input type="date" id="v_date"></div>
+        </div>
+        <h4>Supervisor ratings — 1 (needs improvement) to 5 (outstanding)</h4>
+        <div id="v_scores"></div>
+        <div class="grid" style="margin-top:12px">
+          <div style="grid-column:1/-1"><label>Strengths</label><textarea id="v_strengths" rows="2"></textarea></div>
+          <div style="grid-column:1/-1"><label>Areas for improvement</label><textarea id="v_improve" rows="2"></textarea></div>
+          <div style="grid-column:1/-1"><label>Goals for next period</label><textarea id="v_goals" rows="2"></textarea></div>
+        </div>
+        <div class="row" style="margin-top:14px">
+          <button class="btn" id="saveReview">Save as draft</button>
+          <button class="btn a" id="releaseReview">Save and release to employee</button>
+        </div>
+        <p class="note">A draft stays private to HR. Releasing lets the employee read it and add their self-assessment.</p>
+      </div>
+      <div class="card"><h3>All reviews</h3>
+        <table><thead><tr><th>Employee</th><th>Period</th><th>Supervisor</th><th>Self</th><th>Status</th><th></th></tr></thead>
+        <tbody id="perfRows"></tbody></table></div>
+    </section>
+
     <!-- PAYROLL (HR CONFIDENTIAL) -->
     <section data-view="payroll" class="hidden">
       <div class="head"><div><h2>Payroll sheet</h2><p>Confidential. Visible to HR administrators only.</p></div>
@@ -430,6 +481,52 @@ tr:hover td{background:var(--soft)}
         </div>
         <p class="note">Rates are pulled from each employee's contract. Enter adjustments per row, then save the run.</p>
       </div>
+      <div class="card">
+        <h3>Import biometric report</h3>
+        <p class="note" style="margin-top:0">Upload the raw punch export from your device (CSV or Excel).
+          You'll map the columns and preview the result before anything is saved.</p>
+        <div class="row" style="margin:14px 0">
+          <input type="file" id="bioFile" accept=".csv,.txt,.xlsx,.xls" style="width:auto">
+          <button class="btn g" id="bioReset">Clear</button>
+        </div>
+        <div id="bioMap" class="hidden">
+          <h4>Match the columns</h4>
+          <p class="note" style="margin-top:0">Tell the portal which column holds what. It guesses from the headings.</p>
+          <div class="grid">
+            <div><label>Employee name</label><select id="bm_name"></select></div>
+            <div><label>Date and time (one column)</label><select id="bm_dt"></select></div>
+            <div><label>…or separate date</label><select id="bm_date"></select></div>
+            <div><label>…and separate time</label><select id="bm_time"></select></div>
+            <div><label>Date order</label><select id="bm_order">
+              <option value="dmy">Day/Month/Year — 22/07/2026</option>
+              <option value="mdy">Month/Day/Year — 07/22/2026</option></select></div>
+          </div>
+          <div id="bm_orderWarn"></div>
+          <div class="row" style="margin-top:14px">
+            <button class="btn" id="bioPreview">Preview import</button>
+          </div>
+        </div>
+        <div id="bioPreviewBox" class="hidden">
+          <h4>Preview</h4>
+          <div class="tiles" id="bioTiles"></div>
+          <div id="bioWarn"></div>
+          <div style="max-height:340px;overflow:auto;margin-top:12px">
+            <table><thead><tr><th>Date</th><th>Employee</th><th>In</th><th>Out</th>
+              <th class="right">Hours</th><th>Note</th></tr></thead>
+            <tbody id="bioRows"></tbody></table>
+          </div>
+          <div class="row" style="margin-top:14px">
+            <button class="btn a" id="bioConfirm">Save these entries</button>
+            <button class="btn g" id="bioCancel">Cancel</button>
+          </div>
+          <p class="note">Existing entries for the same person and day are skipped, so re-importing is safe.</p>
+        </div>
+      </div>
+
+      <div class="card"><h3>Import history</h3>
+        <table><thead><tr><th>File</th><th>Period</th><th>Days created</th><th>Imported</th><th></th></tr></thead>
+        <tbody id="bioHist"></tbody></table></div>
+
       <div class="card conf">
         <span class="conftag">◆ Confidential</span>
         <h3>Computation</h3>
@@ -473,6 +570,9 @@ tr:hover td{background:var(--soft)}
           <div><label>Status</label><select id="k_status">
             <option>Open</option><option>Awaiting response</option><option>Response received</option>
             <option>Resolved</option><option>Escalated</option></select></div>
+          <div><label>Issue to employee</label><select id="k_issue">
+            <option value="no">No — keep internal for now</option>
+            <option value="yes">Yes — employee may read and respond</option></select></div>
         </div>
         <div class="row" style="margin-top:14px"><button class="btn" id="addComp">File record</button></div>
         <p class="note">Due process matters: a notice to explain should give the employee a reasonable period to respond in writing before any decision, and a hearing should follow. Have counsel review anything that could lead to dismissal.</p>
@@ -561,7 +661,7 @@ const today=()=>new Date().toISOString().slice(0,10);
 let ME=null;          // my employees row
 let ROLE="employee";
 let VIEWING=null;     // employee whose file HR is viewing
-let D={employees:[],logs:[],leave:[],deliverables:[],onboarding:[],compliance:[],payruns:[],assessments:[]};
+let D={employees:[],logs:[],leave:[],deliverables:[],onboarding:[],compliance:[],payruns:[],assessments:[],reviews:[],imports:[]};
 
 const ONB_DOCS=["Signed contract returned","NBI clearance","Birth certificate (PSA)","SSS number / E-1",
  "PhilHealth MDR","Pag-IBIG number","TIN / BIR 1902 or 2305","2x2 ID photos","Certificate of employment (previous)",
@@ -666,19 +766,26 @@ async function loadAll(){
     sb.from("time_logs").select("*").order("log_date",{ascending:false}).limit(500),
     sb.from("leave_requests").select("*").order("created_at",{ascending:false}),
     sb.from("deliverables").select("*").order("due_date"),
-    sb.from("onboarding_items").select("*")
+    sb.from("onboarding_items").select("*"),
+    sb.from("performance_reviews").select("*").order("created_at",{ascending:false})
   ];
   if(ROLE==="hr"){
     jobs.push(sb.from("compliance_records").select("*").order("created_at",{ascending:false}));
     jobs.push(sb.from("payroll_runs").select("*").order("created_at",{ascending:false}));
     jobs.push(sb.from("assessments").select("*").order("created_at",{ascending:false}));
+    jobs.push(sb.from("biometric_imports").select("*").order("created_at",{ascending:false}));
+  }else{
+    // employees see only records RLS has already filtered to issued-to-them
+    jobs.push(sb.from("compliance_records").select("*").order("created_at",{ascending:false}));
   }
   const r=await Promise.all(jobs);
   const bad=r.find(x=>x.error);
   if(bad){console.error(bad.error);}
   D.employees=r[0].data||[]; D.logs=r[1].data||[]; D.leave=r[2].data||[];
-  D.deliverables=r[3].data||[]; D.onboarding=r[4].data||[];
-  if(ROLE==="hr"){D.compliance=r[5].data||[];D.payruns=r[6].data||[];D.assessments=r[7].data||[];}
+  D.deliverables=r[3].data||[]; D.onboarding=r[4].data||[]; D.reviews=r[5].data||[];
+  if(ROLE==="hr"){D.compliance=r[6].data||[];D.payruns=r[7].data||[];D.assessments=r[8].data||[];
+                  D.imports=r[9].data||[];}
+  else{D.compliance=r[6].data||[];}
   if(ME){const fresh=D.employees.find(e=>e.id===ME.id); if(fresh)ME=fresh;}
   if(VIEWING){const f=D.employees.find(e=>e.id===VIEWING.id); if(f)VIEWING=f;}
   render();
@@ -731,7 +838,7 @@ function csv(name,head,rows){
 const PMAP={position:"p_pos",department:"p_dept",emp_no:"p_id",phone:"p_phone",
  email:"p_email",date_started:"p_start",birth_date:"p_dob",address:"p_addr",emergency_name:"p_ename",
  emergency_relation:"p_erel",emergency_phone:"p_ephone",sss:"p_sss",philhealth:"p_phic",
- pagibig:"p_hdmf",tin:"p_tin"};
+ pagibig:"p_hdmf",tin:"p_tin",biometric_name:"p_bio"};
 function splitName(full){
   const p=String(full||"").trim().split(/\s+/);
   return p.length<2?{first:p[0]||"",last:""}:{first:p.slice(0,-1).join(" "),last:p[p.length-1]};
@@ -915,6 +1022,193 @@ $("addDeliv").onclick=async()=>{
 </script>
 
 <script>
+/* ===================== PERFORMANCE REVIEWS ===================== */
+const PERF_CRITERIA=[
+ {k:"quality",t:"Quality of work"},
+ {k:"productivity",t:"Productivity and output"},
+ {k:"reliability",t:"Reliability and attendance"},
+ {k:"initiative",t:"Initiative and problem solving"},
+ {k:"teamwork",t:"Teamwork and communication"},
+ {k:"conduct",t:"Professional conduct"}
+];
+function scoreRow(prefix,k,t,val,disabled){
+  return `<div class="qrow"><div>${t}</div>
+    <div class="toggle" data-sc="${prefix}${k}">
+      ${[1,2,3,4,5].map(n=>`<button type="button" data-n="${n}"
+        class="${val===n?'yes on':''}" ${disabled?"disabled":""}>${n}</button>`).join("")}
+    </div></div>`;
+}
+function buildScoreInputs(){
+  $("v_scores").innerHTML=PERF_CRITERIA.map(c=>scoreRow("sup_",c.k,c.t,null,false)).join("");
+  wireScores();
+}
+function wireScores(){
+  document.querySelectorAll("[data-sc]").forEach(t=>t.onclick=e=>{
+    if(e.target.tagName!=="BUTTON"||e.target.disabled)return;
+    t.querySelectorAll("button").forEach(b=>b.classList.remove("yes","on"));
+    e.target.classList.add("yes","on");
+  });
+}
+function readScores(prefix){
+  const out={};
+  PERF_CRITERIA.forEach(c=>{
+    const sel=document.querySelector(`[data-sc="${prefix}${c.k}"] button.on`);
+    if(sel)out[c.k]=+sel.dataset.n;
+  });
+  return out;
+}
+function avg(obj){
+  const v=Object.values(obj||{}); if(!v.length)return null;
+  return Math.round(v.reduce((a,b)=>a+b,0)/v.length*10)/10;
+}
+async function saveReviewAs(release){
+  const emp=$("v_emp").value, period=$("v_period").value.trim();
+  if(!emp){toast("Select the employee being reviewed.");return;}
+  if(!period){toast("Enter the review period.");return;}
+  const s=readScores("sup_");
+  if(Object.keys(s).length<PERF_CRITERIA.length){
+    if(!confirm("Not every criterion is rated. Save anyway?"))return;
+  }
+  const r=await db("performance_reviews","insert",{
+    employee_id:emp,period,reviewer_name:$("v_reviewer").value,
+    review_date:$("v_date").value||today(),
+    supervisor_scores:s,supervisor_overall:avg(s),
+    strengths:$("v_strengths").value,areas_for_improvement:$("v_improve").value,
+    goals_next_period:$("v_goals").value,supervisor_submitted_at:new Date().toISOString(),
+    released_to_employee:release,released_on:release?today():null,
+    status:release?"Released — awaiting self-assessment":"Draft"});
+  if(r){
+    ["v_period","v_reviewer","v_strengths","v_improve","v_goals"].forEach(i=>$(i).value="");
+    buildScoreInputs();
+    await loadAll();
+    toast(release?"Review released. The employee can now read it and self-assess."
+                 :"Draft saved. Only HR can see it until you release it.");
+  }
+}
+$("saveReview").onclick=()=>saveReviewAs(false);
+$("releaseReview").onclick=()=>saveReviewAs(true);
+
+function renderHRPerf(){
+  fillEmpSelect("v_emp","— Select employee —");
+  if(!$("v_scores").innerHTML)buildScoreInputs();
+  const rel=D.reviews.filter(r=>r.released_to_employee).length;
+  const selfDone=D.reviews.filter(r=>r.employee_submitted_at).length;
+  $("perfTiles").innerHTML=`
+    <div class="tile"><div class="n">${D.reviews.length}</div><div class="l">Reviews on file</div></div>
+    <div class="tile"><div class="n" style="color:var(--muted)">${D.reviews.length-rel}</div><div class="l">Drafts</div></div>
+    <div class="tile"><div class="n" style="color:var(--accent)">${rel}</div><div class="l">Released</div></div>
+    <div class="tile"><div class="n" style="color:var(--low)">${selfDone}</div><div class="l">Self-assessed</div></div>`;
+  $("perfRows").innerHTML=D.reviews.length?D.reviews.map(r=>{
+    const e=empById(r.employee_id)||{};
+    const st=r.released_to_employee?(r.employee_submitted_at?"b1":"b2"):"bg";
+    const label=r.released_to_employee?(r.employee_submitted_at?"Complete":"Awaiting self-assessment"):"Draft";
+    return `<tr><td><strong>${esc(e.name||"—")}</strong><br><span class="note">${esc(r.reviewer_name||"")}</span></td>
+      <td>${esc(r.period)}<br><span class="note">${esc(r.review_date||"")}</span></td>
+      <td class="mono">${r.supervisor_overall??"—"}</td>
+      <td class="mono">${r.self_overall??"—"}</td>
+      <td><span class="badge ${st}">${label}</span></td>
+      <td>${r.released_to_employee?"":`<button class="btn small a" data-rel="${r.id}">Release</button>`}
+          <button class="btn g small" data-vrm="${r.id}">Remove</button></td></tr>`;
+  }).join(""):`<tr><td colspan="6" class="empty">No reviews yet.</td></tr>`;
+  document.querySelectorAll("[data-rel]").forEach(b=>b.onclick=async()=>{
+    if(!confirm("Release this review to the employee? They will be able to read it."))return;
+    await db("performance_reviews","update",
+      {released_to_employee:true,released_on:today(),status:"Released — awaiting self-assessment"},b.dataset.rel);
+    await loadAll();
+  });
+  document.querySelectorAll("[data-vrm]").forEach(b=>b.onclick=async()=>{
+    if(!confirm("Remove this review permanently?"))return;
+    await db("performance_reviews","delete",null,b.dataset.vrm); await loadAll();
+  });
+}
+
+/* ===================== MY PERFORMANCE (employee) ===================== */
+function renderMyPerf(){
+  const mine=D.reviews.filter(r=>r.employee_id===ME.id);
+  if(!mine.length){
+    $("myPerfList").innerHTML=`<div class="card"><p class="empty">No performance reviews have been shared with you yet.</p></div>`;
+    return;
+  }
+  $("myPerfList").innerHTML=mine.map(r=>{
+    const s=r.supervisor_scores||{}, self=r.self_scores||{};
+    const done=!!r.employee_submitted_at;
+    return `<div class="card">
+      <h3>${esc(r.period)} — reviewed by ${esc(r.reviewer_name||"your supervisor")}</h3>
+      <div class="tiles" style="margin-bottom:14px">
+        <div class="tile"><div class="n">${r.supervisor_overall??"—"}</div><div class="l">Supervisor overall</div></div>
+        <div class="tile"><div class="n">${r.self_overall??"—"}</div><div class="l">Your self-rating</div></div>
+      </div>
+      <table><thead><tr><th>Criterion</th><th class="right">Supervisor</th><th class="right">You</th></tr></thead><tbody>
+      ${PERF_CRITERIA.map(c=>`<tr><td>${c.t}</td>
+        <td class="right mono">${s[c.k]??"—"}</td>
+        <td class="right mono">${self[c.k]??"—"}</td></tr>`).join("")}
+      </tbody></table>
+      ${r.strengths?`<h4>Strengths</h4><p>${esc(r.strengths)}</p>`:""}
+      ${r.areas_for_improvement?`<h4>Areas for improvement</h4><p>${esc(r.areas_for_improvement)}</p>`:""}
+      ${r.goals_next_period?`<h4>Goals for next period</h4><p>${esc(r.goals_next_period)}</p>`:""}
+      ${done?`<h4>Your self-assessment</h4><p>${esc(r.self_comments||"")}</p>
+              <p class="note">Submitted ${esc(String(r.employee_submitted_at).slice(0,10))}. This is now final.</p>`
+      :`<h4>Your self-assessment</h4>
+        <div id="selfScores_${r.id}">${PERF_CRITERIA.map(c=>
+          scoreRow("self"+r.id+"_",c.k,c.t,null,false)).join("")}</div>
+        <div style="margin-top:12px"><label>Your comments</label>
+          <textarea id="selfC_${r.id}" rows="3" placeholder="How do you see your performance this period?"></textarea></div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn a" data-selfsub="${r.id}">Submit my self-assessment</button></div>
+        <p class="note">Your supervisor's ratings cannot be changed. Your assessment is recorded alongside theirs.</p>`}
+    </div>`;
+  }).join("");
+  wireScores();
+  document.querySelectorAll("[data-selfsub]").forEach(b=>b.onclick=async()=>{
+    const id=b.dataset.selfsub;
+    const sc=readScores("self"+id+"_");
+    if(Object.keys(sc).length<PERF_CRITERIA.length){
+      if(!confirm("You haven't rated every criterion. Submit anyway?"))return;
+    }
+    if(!confirm("Submit your self-assessment? It cannot be changed afterwards."))return;
+    const r=await db("performance_reviews","update",
+      {self_scores:sc,self_overall:avg(sc),self_comments:$("selfC_"+id).value,
+       employee_submitted_at:new Date().toISOString()},id);
+    if(r){await loadAll();toast("Your self-assessment has been recorded.");}
+  });
+}
+
+/* ===================== MY RECORDS (employee) ===================== */
+function renderMyRecords(){
+  const mine=D.compliance.filter(c=>c.employee_id===ME.id);
+  if(!mine.length){
+    $("myRecList").innerHTML=`<div class="card"><p class="empty">You have no formal records on file.</p></div>`;
+    return;
+  }
+  $("myRecList").innerHTML=mine.map(c=>{
+    const sc={Minor:"bg",Serious:"b2",Grave:"b4"}[c.severity]||"bg";
+    const answered=!!c.employee_ack_at;
+    return `<div class="card">
+      <h3>${esc(c.record_type)} — ${esc(c.incident_date||"")}</h3>
+      <p><span class="badge ${sc}">${esc(c.severity||"")}</span>
+         ${c.policy_ref?` <span class="note">${esc(c.policy_ref)}</span>`:""}</p>
+      <h4>What was recorded</h4><p>${esc(c.description||"")}</p>
+      ${c.action_required?`<h4>What you need to do</h4><p>${esc(c.action_required)}</p>`:""}
+      ${c.response_due?`<p class="note">Written response due by ${esc(c.response_due)}.</p>`:""}
+      ${answered?`<h4>Your response</h4><p>${esc(c.employee_response||"")}</p>
+                  <p class="note">Submitted ${esc(String(c.employee_ack_at).slice(0,10))}.</p>`
+      :`<h4>Your written response</h4>
+        <textarea id="resp_${c.id}" rows="4" placeholder="Explain your side. This is recorded with the file."></textarea>
+        <div class="row" style="margin-top:12px">
+          <button class="btn a" data-resp="${c.id}">Submit my response</button></div>
+        <p class="note">You may respond once. HR is notified and your response is kept with the record.</p>`}
+    </div>`;
+  }).join("");
+  document.querySelectorAll("[data-resp]").forEach(b=>b.onclick=async()=>{
+    const id=b.dataset.resp, txt=$("resp_"+id).value.trim();
+    if(!txt){toast("Write your response before submitting.");return;}
+    if(!confirm("Submit this response? It cannot be edited afterwards."))return;
+    const r=await db("compliance_records","update",
+      {employee_response:txt,employee_ack_at:new Date().toISOString()},id);
+    if(r){await loadAll();toast("Your response has been recorded.");}
+  });
+}
+
 /* ===================== DIRECTORY ===================== */
 $("newEmpBtn").onclick=()=>$("newEmpCard").classList.remove("hidden");
 $("cancelEmp").onclick=()=>$("newEmpCard").classList.add("hidden");
@@ -1065,15 +1359,300 @@ $("expPay").onclick=()=>{
       return [e.name,e.position,e.monthly_rate,d.ot,d.allow,d.sss,d.phic,d.hdmf,d.tax,d.other,netOf(e)];}));
 };
 
+/* ===================== BIOMETRIC IMPORT ===================== */
+let BIO={rows:[],headers:[],parsed:[],unmatched:[],filename:""};
+
+function normName(s){
+  return String(s||"").toLowerCase()
+    .replace(/[.,]/g,"").replace(/\s+/g," ").trim();
+}
+// tolerate "Dela Cruz, Juan" vs "Juan Dela Cruz"
+function nameKeys(s){
+  const n=normName(s); if(!n)return [];
+  const keys=[n];
+  if(n.includes(",")){
+    const p=n.split(",").map(x=>x.trim());
+    if(p.length===2)keys.push((p[1]+" "+p[0]).replace(/\s+/g," "));
+  }
+  keys.push(n.split(" ").sort().join(" "));   // order-insensitive fallback
+  return [...new Set(keys)];
+}
+function matchEmployee(deviceName){
+  const keys=nameKeys(deviceName);
+  for(const e of D.employees){
+    const cand=[...nameKeys(e.name),...nameKeys(e.biometric_name)];
+    if(cand.some(c=>keys.includes(c)))return e;
+  }
+  return null;
+}
+
+function parseDateTime(dtRaw,dRaw,tRaw,dayFirst){
+  // returns {date:'YYYY-MM-DD', time:'HH:MM'} or null
+  const pad=n=>String(n).padStart(2,"0");
+  const fromDate=d=>({date:`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`,
+                      time:`${pad(d.getHours())}:${pad(d.getMinutes())}`});
+  // Excel serial -> JS date, read as UTC so the local timezone can't shift the day
+  const excelSerial=v=>{
+    const ms=Math.round((Number(v)-25569)*86400*1000);
+    const d=new Date(ms);
+    return new Date(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate(),
+                    d.getUTCHours(),d.getUTCMinutes());
+  };
+  const valid=(y,m,d)=>y>=1990&&y<=2100&&m>=1&&m<=12&&d>=1&&d<=31;
+
+  const readDate=v=>{
+    if(v==null||v==="")return null;
+    if(typeof v==="number"&&v>20000&&v<80000){
+      const d=excelSerial(v); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    }
+    const s=String(v).trim();
+    let m=s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);            // ISO 2026-07-22
+    if(m&&valid(+m[1],+m[2],+m[3]))return `${m[1]}-${pad(m[2])}-${pad(m[3])}`;
+    m=s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/);                 // ambiguous
+    if(m){
+      let a=+m[1],b=+m[2],y=+m[3];
+      let day,mon;
+      if(a>12){day=a;mon=b;}                 // must be day-first
+      else if(b>12){mon=a;day=b;}            // must be month-first
+      else {day=dayFirst?a:b; mon=dayFirst?b:a;}
+      if(valid(y,mon,day))return `${y}-${pad(mon)}-${pad(day)}`;
+      return null;
+    }
+    const d=new Date(s);
+    if(!isNaN(d))return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    return null;
+  };
+  const readTime=v=>{
+    if(v==null||v==="")return null;
+    if(typeof v==="number"){
+      const frac=v-Math.floor(v);
+      if(v>=0&&v<1||frac>0){
+        const mins=Math.round(frac*24*60);
+        return `${pad(Math.floor(mins/60))}:${pad(mins%60)}`;
+      }
+      return null;
+    }
+    const s=String(v).trim();
+    let m=s.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPp])\.?[Mm]?/);
+    if(m){
+      let hh=+m[1]; const pm=/[Pp]/.test(m[3]);
+      if(pm&&hh<12)hh+=12; if(!pm&&hh===12)hh=0;
+      if(hh>23||+m[2]>59)return null;
+      return `${pad(hh)}:${m[2]}`;
+    }
+    m=s.match(/(\d{1,2}):(\d{2})(?::\d{2})?/);
+    if(!m)return null;
+    if(+m[1]>23||+m[2]>59)return null;
+    return `${pad(+m[1])}:${m[2]}`;
+  };
+
+  if(dtRaw!=null&&dtRaw!==""){
+    if(typeof dtRaw==="number")return fromDate(excelSerial(dtRaw));
+    const s=String(dtRaw).trim();
+    const dP=readDate(s), tP=readTime(s);
+    if(dP&&tP)return {date:dP,time:tP};
+    const d=new Date(s);
+    if(!isNaN(d))return fromDate(d);
+    return null;
+  }
+  const dP=readDate(dRaw), tP=readTime(tRaw);
+  return (dP&&tP)?{date:dP,time:tP}:null;
+}
+
+// Scan the file to work out whether dates are day-first or month-first
+function detectDayFirst(rows,dti,di){
+  const idx = dti>=0?dti:di;
+  if(idx<0)return {dayFirst:true,certain:true};
+  let firstOver12=0, secondOver12=0;
+  rows.forEach(r=>{
+    const m=String(r[idx]??"").trim().match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.]\d{4}/);
+    if(!m)return;
+    if(+m[1]>12)firstOver12++;
+    if(+m[2]>12)secondOver12++;
+  });
+  if(firstOver12&&!secondOver12)return {dayFirst:true,certain:true};
+  if(secondOver12&&!firstOver12)return {dayFirst:false,certain:true};
+  return {dayFirst:true,certain:false};   // ambiguous — ask the user
+}
+
+function guessCol(headers,words){
+  const lower=headers.map(h=>String(h||"").toLowerCase());
+  for(const w of words){
+    const i=lower.findIndex(h=>h.includes(w));
+    if(i>=0)return i;
+  }
+  return -1;
+}
+
+$("bioFile").addEventListener("change",async e=>{
+  const f=e.target.files[0]; if(!f)return;
+  BIO.filename=f.name;
+  try{
+    const buf=await f.arrayBuffer();
+    const wb=XLSX.read(buf,{cellDates:false});
+    const sheet=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(sheet,{header:1,blankrows:false,raw:true});
+    if(rows.length<2){toast("That file has no data rows.");return;}
+    BIO.headers=rows[0].map((h,i)=>String(h||`Column ${i+1}`));
+    BIO.rows=rows.slice(1).filter(r=>r.some(c=>c!=null&&c!==""));
+    const opts=(sel,extra)=>{
+      $(sel).innerHTML=(extra?`<option value="-1">— none —</option>`:"")+
+        BIO.headers.map((h,i)=>`<option value="${i}">${esc(h)}</option>`).join("");
+    };
+    opts("bm_name"); opts("bm_dt",true); opts("bm_date",true); opts("bm_time",true);
+    $("bm_name").value=Math.max(0,guessCol(BIO.headers,["name","employee","person","user"]));
+    const dtI=guessCol(BIO.headers,["datetime","date/time","timestamp","punch","scan","log time"]);
+    $("bm_dt").value=dtI;
+    $("bm_date").value=dtI>=0?-1:guessCol(BIO.headers,["date","day"]);
+    $("bm_time").value=dtI>=0?-1:guessCol(BIO.headers,["time","hour","clock"]);
+    const det=detectDayFirst(BIO.rows,dtI,+$("bm_date").value);
+    $("bm_order").value=det.dayFirst?"dmy":"mdy";
+    $("bm_orderWarn").innerHTML=det.certain
+      ? `<p class="note">Date order detected from the file: <strong>${det.dayFirst?"day first":"month first"}</strong>.</p>`
+      : `<div class="rec" style="border-left-color:var(--mod)"><strong>Check the date order.</strong>
+         Every date in this file could be read either way (e.g. 07/08/2026). Pick the right one above,
+         then check the preview dates look correct.</div>`;
+    $("bioMap").classList.remove("hidden");
+    $("bioPreviewBox").classList.add("hidden");
+    toast(`Read ${BIO.rows.length} rows. Check the column matching below.`);
+  }catch(err){
+    console.error(err);
+    toast("Could not read that file. CSV or Excel works best.");
+  }
+});
+
+$("bioReset").onclick=()=>{
+  BIO={rows:[],headers:[],parsed:[],unmatched:[],filename:""};
+  $("bioFile").value="";
+  $("bioMap").classList.add("hidden");
+  $("bioPreviewBox").classList.add("hidden");
+};
+$("bioCancel").onclick=()=>$("bioPreviewBox").classList.add("hidden");
+
+$("bioPreview").onclick=()=>{
+  const ni=+$("bm_name").value, dti=+$("bm_dt").value,
+        di=+$("bm_date").value, ti=+$("bm_time").value;
+  if(dti<0&&(di<0||ti<0)){
+    toast("Choose either a combined date-and-time column, or both a date and a time column.");
+    return;
+  }
+  const dayFirst=$("bm_order").value==="dmy";
+  const punches={};       // key: empId|date -> [times]
+  const unmatched={};
+  let badRows=0;
+  BIO.rows.forEach(r=>{
+    const rawName=r[ni];
+    const dt=parseDateTime(dti>=0?r[dti]:null, di>=0?r[di]:null, ti>=0?r[ti]:null, dayFirst);
+    if(!rawName||!dt){badRows++;return;}
+    const emp=matchEmployee(rawName);
+    if(!emp){ unmatched[String(rawName)]=(unmatched[String(rawName)]||0)+1; return; }
+    const k=emp.id+"|"+dt.date;
+    (punches[k]=punches[k]||[]).push(dt.time);
+  });
+
+  BIO.parsed=Object.entries(punches).map(([k,times])=>{
+    const [empId,date]=k.split("|");
+    times.sort();
+    const tin=times[0], tout=times.length>1?times[times.length-1]:null;
+    const exists=D.logs.some(l=>l.employee_id===empId&&l.log_date===date);
+    return {employee_id:empId,log_date:date,time_in:tin,time_out:tout,
+            hours:tout?hoursBetween(tin,tout):0,punches:times.length,exists};
+  }).sort((a,b)=>a.log_date.localeCompare(b.log_date));
+
+  BIO.unmatched=Object.entries(unmatched).map(([n,c])=>({name:n,count:c}));
+
+  const newOnes=BIO.parsed.filter(p=>!p.exists).length;
+  const dup=BIO.parsed.length-newOnes;
+  const single=BIO.parsed.filter(p=>!p.time_out).length;
+  $("bioTiles").innerHTML=`
+    <div class="tile"><div class="n">${BIO.rows.length}</div><div class="l">Rows in file</div></div>
+    <div class="tile"><div class="n" style="color:var(--low)">${newOnes}</div><div class="l">Days to add</div></div>
+    <div class="tile"><div class="n" style="color:var(--muted)">${dup}</div><div class="l">Already recorded</div></div>
+    <div class="tile"><div class="n" style="color:var(--mod)">${single}</div><div class="l">Missing a punch out</div></div>
+    <div class="tile"><div class="n" style="color:var(--crit)">${BIO.unmatched.length}</div><div class="l">Unmatched names</div></div>`;
+
+  let warn="";
+  if(badRows)warn+=`<div class="rec"><strong>${badRows} row${badRows>1?"s":""} skipped.</strong>
+    The date or time could not be read. Check the column matching above.</div>`;
+  if(BIO.unmatched.length)warn+=`<div class="rec" style="border-left-color:var(--crit)">
+    <strong>${BIO.unmatched.length} name${BIO.unmatched.length>1?"s":""} not in the directory:</strong>
+    ${BIO.unmatched.slice(0,8).map(u=>esc(u.name)+" ("+u.count+")").join(", ")}
+    ${BIO.unmatched.length>8?" and more":""}.<br>
+    <span class="note">These rows will be skipped. Add the person to the directory, or set their
+    device name on their profile, then import again.</span></div>`;
+  if(single)warn+=`<div class="rec" style="border-left-color:var(--mod)">
+    <strong>${single} day${single>1?"s have":" has"} only one punch.</strong>
+    Saved with no time out and zero hours — correct these in the attendance register.</div>`;
+  $("bioWarn").innerHTML=warn;
+
+  $("bioRows").innerHTML=BIO.parsed.length?BIO.parsed.slice(0,300).map(p=>{
+    const e=empById(p.employee_id)||{};
+    return `<tr style="${p.exists?'opacity:.5':''}">
+      <td>${esc(p.log_date)}</td><td>${esc(e.name)}</td>
+      <td>${esc(p.time_in)}</td><td>${esc(p.time_out||"—")}</td>
+      <td class="right mono">${p.time_out?p.hours.toFixed(1):"—"}</td>
+      <td>${p.exists?'<span class="badge bg">Skip — already recorded</span>'
+          :p.punches>2?`<span class="note">${p.punches} punches</span>`:""}</td></tr>`;
+  }).join(""):`<tr><td colspan="6" class="empty">Nothing could be matched. Check the column mapping.</td></tr>`;
+
+  $("bioPreviewBox").classList.remove("hidden");
+};
+
+$("bioConfirm").onclick=async()=>{
+  const toAdd=BIO.parsed.filter(p=>!p.exists);
+  if(!toAdd.length){toast("Nothing new to save — every day is already recorded.");return;}
+  if(!confirm(`Save ${toAdd.length} attendance day${toAdd.length>1?"s":""}?`))return;
+  const dates=toAdd.map(p=>p.log_date).sort();
+  const imp=await db("biometric_imports","insert",{
+    filename:BIO.filename,period_from:dates[0],period_to:dates[dates.length-1],
+    rows_in_file:BIO.rows.length,punches_parsed:BIO.parsed.length,days_created:toAdd.length,
+    unmatched_names:BIO.unmatched,imported_by:ME.id});
+  if(!imp)return;
+  const importId=imp[0].id;
+  const payload=toAdd.map(p=>({employee_id:p.employee_id,log_date:p.log_date,
+    time_in:p.time_in,time_out:p.time_out,hours:p.hours,
+    source:"biometric",import_id:importId}));
+  // insert in batches to stay well under request limits
+  for(let i=0;i<payload.length;i+=200){
+    const r=await db("time_logs","insert",payload.slice(i,i+200));
+    if(!r)return;
+  }
+  $("bioReset").click();
+  await loadAll();
+  toast(`Imported ${toAdd.length} attendance days.`);
+};
+
+function renderBioHist(){
+  if(!D.imports)return;
+  $("bioHist").innerHTML=D.imports.length?D.imports.map(i=>
+    `<tr><td>${esc(i.filename||"—")}</td>
+     <td>${esc(i.period_from||"")} → ${esc(i.period_to||"")}</td>
+     <td class="mono">${i.days_created}</td>
+     <td>${esc(String(i.created_at).slice(0,10))}</td>
+     <td><button class="btn g small" data-undo="${i.id}">Undo</button></td></tr>`).join("")
+    :`<tr><td colspan="5" class="empty">No imports yet.</td></tr>`;
+  document.querySelectorAll("[data-undo]").forEach(b=>b.onclick=async()=>{
+    const imp=D.imports.find(x=>x.id===b.dataset.undo);
+    if(!confirm(`Remove all ${imp.days_created} entries from this import? Manually added entries are not affected.`))return;
+    const {error}=await sb.from("time_logs").delete().eq("import_id",imp.id);
+    if(error){toast("Could not undo: "+error.message);return;}
+    await db("biometric_imports","delete",null,imp.id);
+    await loadAll();
+    toast("Import removed.");
+  });
+}
+
 /* ===================== COMPLIANCE ===================== */
 $("addComp").onclick=async()=>{
   const emp=$("k_emp").value;
   if(!emp){toast("Select the employee this record concerns.");return;}
   if(!$("k_desc").value.trim()){toast("Describe the incident before filing.");return;}
+  const issue=$("k_issue").value==="yes";
   const r=await db("compliance_records","insert",{employee_id:emp,record_type:$("k_type").value,
     incident_date:$("k_date").value||today(),severity:$("k_sev").value,reported_by:$("k_by").value,
     policy_ref:$("k_pol").value,description:$("k_desc").value,action_required:$("k_act").value,
-    response_due:$("k_due").value||null,status:$("k_status").value});
+    response_due:$("k_due").value||null,status:$("k_status").value,
+    issued_to_employee:issue,issued_on:issue?today():null});
   if(r){["k_desc","k_act","k_by","k_pol"].forEach(i=>$(i).value="");
     await loadAll();toast("Record filed to the confidential file.");}
 };
@@ -1099,13 +1678,22 @@ function renderComp(){
     return `<tr><td>${esc(c.incident_date)}</td><td><strong>${esc(e.name)}</strong></td>
       <td>${esc(c.record_type)}${c.policy_ref?`<br><span class="note">${esc(c.policy_ref)}</span>`:""}
         <br><span class="note">${esc((c.description||"").slice(0,90))}${(c.description||"").length>90?"…":""}</span></td>
-      <td><span class="badge ${sc}">${esc(c.severity)}</span></td>
+      <td><span class="badge ${sc}">${esc(c.severity)}</span>
+        ${c.issued_to_employee?`<br><span class="badge ba" style="margin-top:4px">Issued</span>`
+          :`<br><button class="btn small a" style="margin-top:4px" data-issue="${c.id}">Issue</button>`}
+        ${c.employee_ack_at?`<br><span class="note">Employee responded</span>`:""}</td>
       <td><select data-cst="${c.id}" style="padding:4px">
         ${["Open","Awaiting response","Response received","Resolved","Escalated"].map(s=>
           `<option ${c.status===s?"selected":""}>${s}</option>`).join("")}</select>
         ${c.response_due?`<br><span class="note">Due ${esc(c.response_due)}</span>`:""}</td>
       <td><button class="btn g small" data-crm="${c.id}">Remove</button></td></tr>`;
   }).join(""):`<tr><td colspan="6" class="empty">No records filed.</td></tr>`;
+  document.querySelectorAll("[data-issue]").forEach(b=>b.onclick=async()=>{
+    if(!confirm("Issue this record to the employee? They will be able to read it and respond."))return;
+    await db("compliance_records","update",
+      {issued_to_employee:true,issued_on:today(),status:"Awaiting response"},b.dataset.issue);
+    await loadAll();
+  });
   document.querySelectorAll("[data-cst]").forEach(s=>s.onchange=async()=>{
     await db("compliance_records","update",{status:s.value},s.dataset.cst); await loadAll();
   });
@@ -1256,6 +1844,10 @@ function renderDash(){
     if(mineOnb<total)items.push(`${total-mineOnb} onboarding item${total-mineOnb>1?"s":""} still outstanding`);
     const p=D.leave.filter(l=>l.employee_id===ME.id&&l.status==="Pending").length;
     if(p)items.push(`${p} leave request${p>1?"s":""} awaiting approval`);
+    const needSelf=D.reviews.filter(r=>r.employee_id===ME.id&&r.released_to_employee&&!r.employee_submitted_at).length;
+    if(needSelf)items.push(`${needSelf} performance review${needSelf>1?"s need":" needs"} your self-assessment`);
+    const needResp=D.compliance.filter(c=>c.employee_id===ME.id&&!c.employee_ack_at).length;
+    if(needResp)items.push(`${needResp} record${needResp>1?"s require":" requires"} your written response`);
     $("dashAttn").innerHTML=items.length?`<ul style="margin:0;padding-left:18px">${
       items.map(i=>`<li style="margin-bottom:6px">${i}</li>`).join("")}</ul>`
       :`<p class="empty">You are all caught up.</p>`;
@@ -1267,8 +1859,9 @@ function render(){
   try{
     renderDash(); renderProfile(); renderContract(); renderClock();
     renderLeave(); renderOnboard(); renderDeliv();
+    renderMyPerf(); renderMyRecords();
     if(ROLE==="hr"){renderDir();renderApprovals();renderAtt();renderPay();
-      renderPayHist();renderComp();renderAssess();}
+      renderPayHist();renderComp();renderAssess();renderHRPerf();renderBioHist();}
   }catch(err){console.error(err);}
 }
 (async function boot(){
