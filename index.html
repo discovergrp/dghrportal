@@ -474,12 +474,21 @@ tr:hover td{background:var(--soft)}
         <div class="row"><button class="btn g" id="expPay">Export CSV</button></div></div>
       <div class="card conf">
         <span class="conftag">◆ Confidential — HR access</span>
-        <h3>Period</h3>
+        <h3>Pay period</h3>
         <div class="grid">
-          <div><label>Cut-off</label><input type="text" id="pr_period" placeholder="e.g. 1–15 July 2026"></div>
-          <div><label>Pay date</label><input type="date" id="pr_date"></div>
+          <div><label>Pay group</label><select id="pr_group">
+            <option value="contractor">Contractors — paid 14th &amp; 28th</option>
+            <option value="regular">Regular employees — paid 1st &amp; 16th</option></select></div>
+          <div><label>Pay date</label><select id="pr_paydate"></select></div>
+          <div><label>Cut-off from</label><input type="date" id="pr_from"></div>
+          <div><label>Cut-off to</label><input type="date" id="pr_to"></div>
         </div>
-        <p class="note">Rates are pulled from each employee's contract. Enter adjustments per row, then save the run.</p>
+        <p class="note" id="pr_note"></p>
+        <div class="row" style="margin-top:12px">
+          <button class="btn" id="pr_load">Load days worked from time log</button>
+        </div>
+        <p class="note">Cut-off closes 5 days before the pay date. Daily-rate staff are paid for days
+          actually logged in that window; monthly staff are prorated against their standard days.</p>
       </div>
       <div class="card">
         <h3>Import biometric report</h3>
@@ -532,10 +541,10 @@ tr:hover td{background:var(--soft)}
         <h3>Computation</h3>
         <div style="overflow-x:auto">
         <table><thead><tr>
-          <th>Employee</th><th>Basic</th><th>Days/OT</th><th>Allowance</th>
+          <th>Employee</th><th>Rate</th><th>Days</th><th>Gross</th><th>OT/Adj</th><th>Allowance</th>
           <th>SSS</th><th>PhilHealth</th><th>Pag-IBIG</th><th>Tax</th><th>Other</th><th class="right">Net pay</th>
         </tr></thead><tbody id="payRows"></tbody>
-        <tfoot><tr><th colspan="9" class="right">Total net</th><th class="right mono" id="payTotal">₱0.00</th></tr></tfoot></table>
+        <tfoot><tr><th colspan="11" class="right">Total net</th><th class="right mono" id="payTotal">₱0.00</th></tr></tfoot></table>
         </div>
         <div class="row" style="margin-top:14px"><button class="btn" id="savePay">Save payroll run</button></div>
       </div>
@@ -1305,39 +1314,150 @@ $("expAtt").onclick=()=>csv("discover-attendance.csv",["Date","Employee","In","O
 
 /* ===================== PAYROLL ===================== */
 const payDraft={};
+
+/* --- pay calendar --- */
+function isoD(y,m,d){return new Date(Date.UTC(y,m-1,d)).toISOString().slice(0,10);}
+function addDays(s,n){const d=new Date(s+"T00:00:00Z");d.setUTCDate(d.getUTCDate()+n);
+  return d.toISOString().slice(0,10);}
+function payDatesFor(group,y,m){
+  return group==="contractor" ? [isoD(y,m,14),isoD(y,m,28)] : [isoD(y,m,1),isoD(y,m,16)];
+}
+function cutoffFor(group,payDate){
+  const end=addDays(payDate,-5);
+  const d=new Date(payDate+"T00:00:00Z");
+  const y=d.getUTCFullYear(),m=d.getUTCMonth()+1,day=d.getUTCDate();
+  let prev;
+  if(group==="contractor"){
+    prev = day===28 ? isoD(y,m,14) : (m===1?isoD(y-1,12,28):isoD(y,m-1,28));
+  }else{
+    prev = day===16 ? isoD(y,m,1)  : (m===1?isoD(y-1,12,16):isoD(y,m-1,16));
+  }
+  return {start:addDays(addDays(prev,-5),1),end};
+}
+function fillPayDates(){
+  const g=$("pr_group").value;
+  const now=new Date();
+  const opts=[];
+  for(let off=-1;off<=1;off++){
+    const d=new Date(now.getFullYear(),now.getMonth()+off,1);
+    payDatesFor(g,d.getFullYear(),d.getMonth()+1).forEach(p=>opts.push(p));
+  }
+  opts.sort();
+  $("pr_paydate").innerHTML=opts.map(p=>`<option value="${p}">${p}</option>`).join("");
+  // default to the next upcoming pay date
+  const t=today();
+  const next=opts.find(p=>p>=t)||opts[opts.length-1];
+  $("pr_paydate").value=next;
+  syncCutoff();
+}
+function syncCutoff(){
+  const g=$("pr_group").value,p=$("pr_paydate").value;
+  if(!p)return;
+  const c=cutoffFor(g,p);
+  $("pr_from").value=c.start; $("pr_to").value=c.end;
+  const n=D.employees.filter(e=>e.status!=="Separated"&&payGroupOf(e)===g).length;
+  $("pr_note").textContent=`${n} ${g==="contractor"?"contractors":"regular employees"} in this run. `+
+    `Work from ${c.start} to ${c.end}, paid ${p}.`;
+  renderPay();
+}
+$("pr_group").onchange=fillPayDates;
+$("pr_paydate").onchange=syncCutoff;
+$("pr_from").onchange=renderPay;
+$("pr_to").onchange=renderPay;
+
+function payGroupOf(e){
+  return e.employment_type==="Regular" ? "regular" : "contractor";
+}
+function daysWorked(empId,from,to){
+  if(!from||!to)return 0;
+  const set=new Set();
+  D.logs.forEach(l=>{
+    if(l.employee_id===empId&&l.log_date>=from&&l.log_date<=to&&l.time_out)set.add(l.log_date);
+  });
+  return set.size;
+}
+$("pr_load").onclick=()=>{
+  const from=$("pr_from").value,to=$("pr_to").value;
+  if(!from||!to){toast("Set the cut-off dates first.");return;}
+  let filled=0;
+  D.employees.filter(e=>e.status!=="Separated"&&payGroupOf(e)===$("pr_group").value).forEach(e=>{
+    const d=daysWorked(e.id,from,to);
+    payDraft[e.id]=payDraft[e.id]||{};
+    payDraft[e.id].days=d;
+    if(d)filled++;
+  });
+  renderPay();
+  toast(filled?`Loaded days worked for ${filled} people from the time log.`
+              :"No attendance found in this window. Import the biometric report first, or enter days manually.");
+};
+
+function grossOf(e){
+  const d=payDraft[e.id]||{};
+  const rate=Number(e.monthly_rate)||0;
+  if(!rate)return 0;
+  if(e.rate_basis==="Daily"){
+    return rate*(Number(d.days)||0);
+  }
+  // monthly: half the monthly rate per semi-monthly cut-off, prorated if days entered
+  const std=Number(e.days_per_cutoff)||13;
+  const half=rate/2;
+  if(d.days===undefined||d.days===null||d.days==="")return half;
+  return Math.round(half*(Number(d.days)/std)*100)/100;
+}
+function netOf(e){
+  const d=payDraft[e.id]||{};
+  return grossOf(e)+(+d.ot||0)+(+d.allow||0)
+    -((+d.sss||0)+(+d.phic||0)+(+d.hdmf||0)+(+d.tax||0)+(+d.other||0));
+}
 function renderPay(){
-  const act=D.employees.filter(e=>e.status!=="Separated");
+  if(!$("pr_paydate").options.length)fillPayDates();
+  const g=$("pr_group").value;
+  const act=D.employees.filter(e=>e.status!=="Separated"&&payGroupOf(e)===g);
   $("payRows").innerHTML=act.length?act.map(e=>{
-    const d=payDraft[e.id]||(payDraft[e.id]={ot:0,allow:0,sss:0,phic:0,hdmf:0,tax:0,other:0});
-    const f=k=>`<td><input type="number" data-pay="${e.id}" data-k="${k}" value="${d[k]||0}" style="width:88px;padding:5px"></td>`;
+    const d=payDraft[e.id]||(payDraft[e.id]={days:"",ot:0,allow:0,sss:0,phic:0,hdmf:0,tax:0,other:0});
+    const f=k=>`<td><input type="number" data-pay="${e.id}" data-k="${k}" value="${d[k]||0}" style="width:82px;padding:5px"></td>`;
+    const daily=e.rate_basis==="Daily";
+    const rateCell=e.monthly_rate
+      ? `${peso(e.monthly_rate)}<br><span class="note">${daily?"per day":"per month"}</span>`
+      : `<span class="note">${esc(e.rate_note||"no rate set")}</span>`;
     return `<tr><td><strong>${esc(e.name)}</strong><br><span class="note">${esc(e.position||"")}</span></td>
-      <td class="mono">${peso(e.monthly_rate||0)}</td>
+      <td class="mono">${rateCell}</td>
+      <td><input type="number" data-pay="${e.id}" data-k="days" value="${d.days??""}"
+           placeholder="${daily?"0":"std"}" style="width:70px;padding:5px"></td>
+      <td class="mono" data-gross="${e.id}">${peso(grossOf(e))}</td>
       ${f("ot")}${f("allow")}${f("sss")}${f("phic")}${f("hdmf")}${f("tax")}${f("other")}
       <td class="right mono" data-net="${e.id}">${peso(netOf(e))}</td></tr>`;
-  }).join(""):`<tr><td colspan="10" class="empty">No employees on record.</td></tr>`;
+  }).join(""):`<tr><td colspan="12" class="empty">No one in this pay group.</td></tr>`;
   document.querySelectorAll("[data-pay]").forEach(i=>i.oninput=()=>{
-    payDraft[i.dataset.pay][i.dataset.k]=Number(i.value)||0;
-    document.querySelector(`[data-net="${i.dataset.pay}"]`).textContent=peso(netOf(empById(i.dataset.pay)));
+    const k=i.dataset.k;
+    payDraft[i.dataset.pay][k] = k==="days" ? (i.value===""?"":Number(i.value)) : (Number(i.value)||0);
+    const e=empById(i.dataset.pay);
+    const gEl=document.querySelector(`[data-gross="${e.id}"]`);
+    if(gEl)gEl.textContent=peso(grossOf(e));
+    document.querySelector(`[data-net="${e.id}"]`).textContent=peso(netOf(e));
     payTotal();
   });
   payTotal();
 }
-function netOf(e){
-  const d=payDraft[e.id]||{};
-  return (Number(e.monthly_rate)||0)+(+d.ot||0)+(+d.allow||0)
-    -((+d.sss||0)+(+d.phic||0)+(+d.hdmf||0)+(+d.tax||0)+(+d.other||0));
-}
 function payTotal(){
-  $("payTotal").textContent=peso(D.employees.filter(e=>e.status!=="Separated")
+  const g=$("pr_group").value;
+  $("payTotal").textContent=peso(D.employees
+    .filter(e=>e.status!=="Separated"&&payGroupOf(e)===g)
     .reduce((a,e)=>a+netOf(e),0));
 }
 $("savePay").onclick=async()=>{
-  const p=$("pr_period").value.trim();
-  if(!p){toast("Enter the cut-off period.");return;}
-  const act=D.employees.filter(e=>e.status!=="Separated");
-  const r=await db("payroll_runs","insert",{period:p,pay_date:$("pr_date").value||null,
+  const g=$("pr_group").value,p=$("pr_paydate").value;
+  const from=$("pr_from").value,to=$("pr_to").value;
+  if(!p||!from||!to){toast("Set the pay date and cut-off first.");return;}
+  const act=D.employees.filter(e=>e.status!=="Separated"&&payGroupOf(e)===g);
+  const noRate=act.filter(e=>!e.monthly_rate).length;
+  if(noRate&&!confirm(`${noRate} ${noRate>1?"people have":"person has"} no rate on file and will show as zero. Save anyway?`))return;
+  const r=await db("payroll_runs","insert",{
+    period:`${g==="contractor"?"Contractors":"Regular"} · ${from} to ${to}`,
+    pay_group:g,cutoff_from:from,cutoff_to:to,pay_date:p,
     headcount:act.length,total_net:act.reduce((a,e)=>a+netOf(e),0),
-    lines:act.map(e=>({name:e.name,basic:e.monthly_rate,...payDraft[e.id],net:netOf(e)}))});
+    lines:act.map(e=>({name:e.name,rate:e.monthly_rate,basis:e.rate_basis,
+      ...payDraft[e.id],gross:grossOf(e),net:netOf(e)}))});
   if(r){await loadAll();toast("Payroll run saved.");}
 };
 function renderPayHist(){
@@ -1352,11 +1472,14 @@ function renderPayHist(){
   });
 }
 $("expPay").onclick=()=>{
-  const act=D.employees.filter(e=>e.status!=="Separated");
-  csv("discover-payroll.csv",
-    ["Employee","Position","Basic","OT","Allowance","SSS","PhilHealth","Pag-IBIG","Tax","Other","Net"],
+  const g=$("pr_group").value;
+  const act=D.employees.filter(e=>e.status!=="Separated"&&payGroupOf(e)===g);
+  csv(`discover-payroll-${g}-${$("pr_to").value||today()}.csv`,
+    ["Employee","Position","Rate","Basis","Days","Gross","OT/Adj","Allowance",
+     "SSS","PhilHealth","Pag-IBIG","Tax","Other","Net"],
     act.map(e=>{const d=payDraft[e.id]||{};
-      return [e.name,e.position,e.monthly_rate,d.ot,d.allow,d.sss,d.phic,d.hdmf,d.tax,d.other,netOf(e)];}));
+      return [e.name,e.position,e.monthly_rate,e.rate_basis,d.days,grossOf(e),
+              d.ot,d.allow,d.sss,d.phic,d.hdmf,d.tax,d.other,netOf(e)];}));
 };
 
 /* ===================== BIOMETRIC IMPORT ===================== */
