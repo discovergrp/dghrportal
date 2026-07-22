@@ -111,6 +111,16 @@ tr:hover td{background:var(--soft)}
   color:var(--muted)!important;font-size:12px!important;font-weight:600!important;
   cursor:pointer;letter-spacing:.04em}
 .loginbox .pwtog:hover{background:#e2ecf8!important;color:var(--ink)!important}
+/* employment type colours */
+.t-ind{background:#8a6410}     /* Independent contractor — amber */
+.t-reg{background:#0f7d5c}     /* Regular — green */
+.t-part{background:#6b3fa0}    /* Part-timer — purple */
+.t-out{background:#0f6f7d}     /* Outsource — teal */
+.t-prob{background:#0d4ea8}    /* Probationary — blue */
+.t-proj{background:#b4541c}    /* Project-based — orange */
+.t-fixed{background:#5b7089}   /* Fixed-term — slate */
+.legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:14px;font-size:12px}
+.legend span.badge{margin-right:5px}
 .msg{padding:10px 12px;font-size:13px;margin-top:14px;border-left:3px solid}
 .msg.err{background:#fdf0f0;border-color:var(--crit);color:#7d1a24}
 .msg.ok{background:#eef7f2;border-color:var(--low);color:#1d5340}
@@ -241,6 +251,31 @@ tr:hover td{background:var(--soft)}
           <div><label>Pag-IBIG</label><input type="text" id="p_hdmf"></div>
           <div><label>TIN</label><input type="text" id="p_tin"></div>
         </div>
+
+        <div class="hrOnly">
+          <h4>◆ Personal bank account</h4>
+          <div class="grid">
+            <div><label>Bank</label><input type="text" id="p_bank"></div>
+            <div><label>Account name</label><input type="text" id="p_bankname"></div>
+            <div><label>Account number</label><input type="text" id="p_bankno"></div>
+          </div>
+
+          <h4>◆ Payroll account</h4>
+          <div class="grid">
+            <div><label>Payroll bank</label><input type="text" id="p_pbank"></div>
+            <div><label>Account name</label><input type="text" id="p_pname"></div>
+            <div><label>Account number</label><input type="text" id="p_pno"></div>
+          </div>
+
+          <h4>Other records</h4>
+          <div class="grid">
+            <div><label>HMO account number</label><input type="text" id="p_hmo"></div>
+            <div><label>Highest education</label><input type="text" id="p_educ"></div>
+            <div><label>Employee number</label><input type="text" id="p_empno2" disabled
+                 style="background:#eef1f6;color:var(--muted)"></div>
+          </div>
+          <p class="note">Bank and payroll details are visible to HR administrators only.</p>
+        </div>
         <div class="row" style="margin-top:16px"><button class="btn" id="saveProfile">Save profile</button></div>
       </div>
     </section>
@@ -257,7 +292,8 @@ tr:hover td{background:var(--soft)}
             <div class="grid">
               <div><label>Employment type</label><select id="c_type">
                 <option>Independent contractor</option><option>Probationary</option>
-                <option>Regular</option><option>Project-based</option><option>Fixed-term</option></select></div>
+                <option>Regular</option><option>Part-timer</option><option>Outsource</option>
+                <option>Project-based</option><option>Fixed-term</option></select></div>
               <div><label>Status</label><select id="c_status"><option>Active</option><option>On leave</option><option>Separated</option></select></div>
               <div><label>Contract start</label><input type="date" id="c_start"></div>
               <div><label>Contract end / regularization</label><input type="date" id="c_end"></div>
@@ -369,12 +405,22 @@ tr:hover td{background:var(--soft)}
     <section data-view="directory" class="hidden">
       <div class="head"><div><h2>Employee directory</h2><p>Every worker on record. Open a profile to view or edit their full file.</p></div>
         <div class="row"><button class="btn" id="newEmpBtn">Add employee</button><button class="btn g" id="expEmp">Export CSV</button></div></div>
+      <div class="tiles" id="dirTiles"></div>
       <div class="card">
+        <div class="legend">
+          <span class="badge t-ind">Independent contractor</span>
+          <span class="badge t-reg">Regular</span>
+          <span class="badge t-part">Part-timer</span>
+          <span class="badge t-out">Outsource</span>
+          <span class="badge t-prob">Probationary</span>
+          <span class="badge t-proj">Project-based</span>
+          <span class="badge t-fixed">Fixed-term</span>
+        </div>
         <div class="row" style="margin-bottom:12px">
           <input type="text" id="dirSearch" placeholder="Search name, position, department" style="flex:1;min-width:180px">
           <select id="dirFilter" style="width:auto"><option value="">All types</option>
-            <option>Independent contractor</option><option>Probationary</option><option>Regular</option>
-            <option>Project-based</option><option>Fixed-term</option></select>
+            <option>Independent contractor</option><option>Regular</option><option>Part-timer</option><option>Outsource</option>
+            <option>Probationary</option><option>Project-based</option><option>Fixed-term</option></select>
         </div>
         <table><thead><tr><th>Name</th><th>Position</th><th>Dept</th><th>Type</th><th>Started</th><th>Status</th><th></th></tr></thead>
         <tbody id="dirRows"></tbody></table>
@@ -387,8 +433,8 @@ tr:hover td{background:var(--soft)}
           <div><label>Position</label><input type="text" id="n_pos"></div>
           <div><label>Department</label><input type="text" id="n_dept"></div>
           <div><label>Employment type</label><select id="n_type">
-            <option>Independent contractor</option><option>Probationary</option><option>Regular</option>
-            <option>Project-based</option><option>Fixed-term</option></select></div>
+            <option>Independent contractor</option><option>Regular</option><option>Part-timer</option><option>Outsource</option>
+            <option>Probationary</option><option>Project-based</option><option>Fixed-term</option></select></div>
           <div><label>Date started</label><input type="date" id="n_start"></div>
           <div><label>Basic monthly rate (₱)</label><input type="number" id="n_rate"></div>
         </div>
@@ -812,6 +858,16 @@ async function db(table,op,payload,match){
 const empById=id=>D.employees.find(e=>e.id===id);
 const subject=()=>VIEWING||ME;
 
+/* colour class for an employment type */
+function typeClass(t){
+  return {"Independent contractor":"t-ind","Regular":"t-reg","Part-timer":"t-part",
+          "Outsource":"t-out","Probationary":"t-prob","Project-based":"t-proj",
+          "Fixed-term":"t-fixed"}[t]||"bg";
+}
+function typeBadge(t){
+  return `<span class="badge ${typeClass(t)}">${esc(t||"—")}</span>`;
+}
+
 /* ===================== NAV ===================== */
 function go(v){
   document.querySelectorAll("[data-view]").forEach(s=>s.classList.toggle("hidden",s.dataset.view!==v));
@@ -847,7 +903,10 @@ function csv(name,head,rows){
 const PMAP={position:"p_pos",department:"p_dept",emp_no:"p_id",phone:"p_phone",
  email:"p_email",date_started:"p_start",birth_date:"p_dob",address:"p_addr",emergency_name:"p_ename",
  emergency_relation:"p_erel",emergency_phone:"p_ephone",sss:"p_sss",philhealth:"p_phic",
- pagibig:"p_hdmf",tin:"p_tin",biometric_name:"p_bio"};
+ pagibig:"p_hdmf",tin:"p_tin",biometric_name:"p_bio",
+ bank_name:"p_bank",bank_account_name:"p_bankname",bank_number:"p_bankno",
+ payroll_bank_name:"p_pbank",payroll_account_name:"p_pname",payroll_account_number:"p_pno",
+ hmo_number:"p_hmo",education:"p_educ"};
 function splitName(full){
   const p=String(full||"").trim().split(/\s+/);
   return p.length<2?{first:p[0]||"",last:""}:{first:p.slice(0,-1).join(" "),last:p[p.length-1]};
@@ -856,6 +915,7 @@ function renderProfile(){
   const e=subject(); if(!e)return;
   const n=splitName(e.name);
   $("p_first").value=n.first; $("p_last").value=n.last;
+  const en=$("p_empno2"); if(en)en.value=e.emp_no||"";
   Object.entries(PMAP).forEach(([k,id])=>{const el=$(id); if(el)el.value=e[k]||"";});
 }
 $("saveProfile").onclick=async()=>{
@@ -872,7 +932,7 @@ $("saveProfile").onclick=async()=>{
 function renderContract(){
   const e=subject(); if(!e)return;
   $("contractRead").innerHTML=`<table>
-    <tr><th style="width:170px">Employment type</th><td><span class="badge ba">${esc(e.employment_type||"—")}</span></td></tr>
+    <tr><th style="width:170px">Employment type</th><td>${typeBadge(e.employment_type)}</td></tr>
     <tr><th>Status</th><td>${esc(e.status||"Active")}</td></tr>
     <tr><th>Contract start</th><td>${esc(e.contract_start||e.date_started||"—")}</td></tr>
     <tr><th>End / regularization</th><td>${esc(e.contract_end||"—")}</td></tr>
@@ -1236,6 +1296,19 @@ $("createEmp").onclick=async()=>{
   }
 };
 function renderDir(){
+  const counts={};
+  D.employees.forEach(e=>{counts[e.employment_type]=(counts[e.employment_type]||0)+1;});
+  const order=["Independent contractor","Regular","Part-timer","Outsource",
+               "Probationary","Project-based","Fixed-term"];
+  const colr={"Independent contractor":"#8a6410","Regular":"#0f7d5c","Part-timer":"#6b3fa0",
+              "Outsource":"#0f6f7d","Probationary":"#0d4ea8","Project-based":"#b4541c",
+              "Fixed-term":"#5b7089"};
+  $("dirTiles").innerHTML=
+    `<div class="tile"><div class="n">${D.employees.length}</div><div class="l">Total on record</div></div>`+
+    order.filter(t=>counts[t]).map(t=>
+      `<div class="tile" style="border-left:4px solid ${colr[t]}">
+        <div class="n" style="color:${colr[t]}">${counts[t]}</div>
+        <div class="l">${esc(t)}</div></div>`).join("");
   const q=($("dirSearch").value||"").toLowerCase(),f=$("dirFilter").value;
   const rows=D.employees.filter(e=>(!f||e.employment_type===f)&&
     ((e.name||"")+(e.position||"")+(e.department||"")).toLowerCase().includes(q));
@@ -1244,7 +1317,7 @@ function renderDir(){
     return `<tr><td><strong>${esc(e.name)}</strong>${e.is_hr?' <span class="badge ba">HR</span>':""}
         ${e.user_id?"":'<br><span class="note">No login yet</span>'}</td>
       <td>${esc(e.position)}</td><td>${esc(e.department)}</td>
-      <td><span class="badge ba">${esc(e.employment_type)}</span></td>
+      <td>${typeBadge(e.employment_type)}</td>
       <td>${esc(e.date_started||"—")}</td>
       <td><span class="badge ${sc}">${esc(e.status||"Active")}</span></td>
       <td><button class="btn g small" data-open="${e.id}">Open file</button>
@@ -1266,9 +1339,16 @@ function renderDir(){
 }
 $("dirSearch").oninput=renderDir; $("dirFilter").onchange=renderDir;
 $("expEmp").onclick=()=>csv("discover-employees.csv",
-  ["Name","Position","Department","Type","Status","Started","Schedule","Reports to","Email","Mobile"],
-  D.employees.map(e=>[e.name,e.position,e.department,e.employment_type,e.status,
-    e.date_started,e.schedule,e.reports_to,e.email,e.phone]));
+  ["Name","Employee No","Position","Department","Type","Status","Started","Schedule","Reports to",
+   "Email","Mobile","Address","Rate","Rate basis","SSS","PhilHealth","Pag-IBIG","TIN",
+   "Bank","Bank account name","Bank number","Payroll bank","Payroll account name","Payroll account number",
+   "HMO","Education","Emergency contact","Emergency phone"],
+  D.employees.map(e=>[e.name,e.emp_no,e.position,e.department,e.employment_type,e.status,
+    e.date_started,e.schedule,e.reports_to,e.email,e.phone,e.address,
+    e.monthly_rate,e.rate_basis,e.sss,e.philhealth,e.pagibig,e.tin,
+    e.bank_name,e.bank_account_name,e.bank_number,
+    e.payroll_bank_name,e.payroll_account_name,e.payroll_account_number,
+    e.hmo_number,e.education,e.emergency_name,e.emergency_phone]));
 
 /* ===================== APPROVALS ===================== */
 function renderApprovals(){
@@ -1366,6 +1446,7 @@ $("pr_from").onchange=renderPay;
 $("pr_to").onchange=renderPay;
 
 function payGroupOf(e){
+  if(e.employment_type==="Outsource")return "none";   // billed via agency, not payroll
   return e.employment_type==="Regular" ? "regular" : "contractor";
 }
 function daysWorked(empId,from,to){
