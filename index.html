@@ -325,17 +325,20 @@ tr:hover td{background:var(--soft)}
             <div class="clocktime" id="liveClock">--:--</div>
             <div class="clockdate" id="liveDate"></div>
             <div id="clockState" style="margin-bottom:16px"></div>
-            <div class="row" style="justify-content:center">
-              <button class="btn a" id="inBtn">Log in</button>
-              <button class="btn d" id="outBtn">Log out</button>
-            </div>
+            <div id="clockButtons" class="row" style="justify-content:center;flex-wrap:wrap;gap:8px"></div>
             <p class="note" id="clockNote"></p>
           </div>
+          <div id="todayBreakdown"></div>
         </div>
         <div class="card">
           <h3>My recent entries</h3>
-          <table><thead><tr><th>Date</th><th>In</th><th>Out</th><th class="right">Hours</th></tr></thead>
+          <div style="overflow-x:auto">
+          <table><thead><tr><th>Date</th><th>In</th><th>Out</th>
+            <th class="right">Breaks</th><th class="right">Worked</th></tr></thead>
           <tbody id="myLogRows"></tbody></table>
+          </div>
+          <p class="note">Worked hours exclude the unpaid meal period. The two 15-minute
+            breaks are paid and stay in your hours.</p>
         </div>
       </div>
     </section>
@@ -464,7 +467,9 @@ tr:hover td{background:var(--soft)}
           <input type="date" id="attDate" style="width:auto">
           <button class="btn g small" id="attClear">Clear filters</button>
         </div>
-        <table><thead><tr><th>Date</th><th>Employee</th><th>In</th><th>Out</th><th class="right">Hours</th></tr></thead>
+        <table><thead><tr><th>Date</th><th>Employee</th><th>In</th><th>Out</th>
+          <th>1st break</th><th>Lunch</th><th>2nd break</th>
+          <th class="right">Worked</th></tr></thead>
         <tbody id="attRows"></tbody></table>
       </div>
     </section>
@@ -708,7 +713,17 @@ const SUPABASE_URL="https://gkzawpmovzsvscvzmpwa.supabase.co";
 const SUPABASE_KEY="sb_publishable_TM5knTlqVJeV4rb0DdrejQ__cE2YaeJ";
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 
-const $=id=>document.getElementById(id);
+/* If an element is missing (stale cache, sandboxed preview), return a harmless
+   stub so a single absent node cannot abort the whole script. */
+const _stub={value:"",textContent:"",innerHTML:"",style:{},classList:{add(){},remove(){},toggle(){}},
+             options:[],files:[],disabled:false,checked:false,readOnly:false,
+             addEventListener(){},focus(){},click(){},querySelectorAll(){return[]}};
+const $=id=>{
+  const el=document.getElementById(id);
+  if(el)return el;
+  console.warn("missing element:",id);
+  return Object.create(_stub);
+};
 const esc=s=>String(s??"").replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
 const peso=n=>"₱"+(Number(n)||0).toLocaleString("en-PH",{minimumFractionDigits:2,maximumFractionDigits:2});
 const today=()=>new Date().toISOString().slice(0,10);
@@ -976,34 +991,162 @@ setInterval(()=>{
     {weekday:"long",day:"numeric",month:"long",year:"numeric"});
 },1000);
 
+const BREAK_ALLOWANCE={break1:15,lunch:60,break2:15};   // minutes
 const openEntry=()=>D.logs.find(l=>l.employee_id===ME.id&&!l.time_out);
+const nowTime=()=>new Date().toTimeString().slice(0,8);
+const hhmm=t=>t?String(t).slice(0,5):null;
+
+function minsBetween(a,b){
+  if(!a||!b)return 0;
+  const [ah,am]=hhmm(a).split(":").map(Number),[bh,bm]=hhmm(b).split(":").map(Number);
+  let m=(bh*60+bm)-(ah*60+am); if(m<0)m+=1440;
+  return m;
+}
+/* minutes taken for each break that has both ends recorded */
+function breakMins(l){
+  return {
+    break1: minsBetween(l.break1_out,l.break1_in),
+    lunch:  minsBetween(l.lunch_out,l.lunch_in),
+    break2: minsBetween(l.break2_out,l.break2_in)
+  };
+}
+/* worked hours = gross minus unpaid lunch only */
+function computeHours(l){
+  const gross=minsBetween(l.time_in,l.time_out);
+  const b=breakMins(l);
+  const paidBreaks=b.break1+b.break2;
+  const net=Math.max(0,gross-b.lunch);
+  return {
+    grossHrs: Math.round(gross/6)/10,
+    netHrs:   Math.round(net/6)/10,
+    breakTotal: b.break1+b.lunch+b.break2,
+    lunch:b.lunch, break1:b.break1, break2:b.break2, paidBreaks
+  };
+}
+/* which break, if any, is currently running */
+function activeBreak(l){
+  if(!l)return null;
+  if(l.break1_out&&!l.break1_in)return "break1";
+  if(l.lunch_out&&!l.lunch_in)  return "lunch";
+  if(l.break2_out&&!l.break2_in)return "break2";
+  return null;
+}
+const BREAK_LABEL={break1:"1st 15-minute break",lunch:"Lunch break",break2:"2nd 15-minute break"};
+
 function renderClock(){
   const open=openEntry();
-  $("clockState").innerHTML=open?`<span class="badge b1">Logged in since ${esc(open.time_in.slice(0,5))}</span>`
-    :`<span class="badge bg">Not logged in</span>`;
-  $("inBtn").disabled=!!open; $("outBtn").disabled=!open;
-  $("inBtn").style.opacity=open?.45:1; $("outBtn").style.opacity=open?1:.45;
-  $("clockNote").textContent=open?"Remember to log out at the end of your shift.":"";
+  const act=activeBreak(open);
+
+  /* state badge */
+  if(!open){
+    $("clockState").innerHTML=`<span class="badge bg">Not logged in</span>`;
+  }else if(act){
+    const taken=minsBetween(open[act+"_out"],nowTime());
+    const over=taken>BREAK_ALLOWANCE[act];
+    $("clockState").innerHTML=
+      `<span class="badge ${over?"b4":"b2"}">On ${BREAK_LABEL[act].toLowerCase()} — ${taken} min</span>`+
+      (over?`<br><span class="note" style="color:var(--crit)">Over the
+        ${BREAK_ALLOWANCE[act]}-minute allowance by ${taken-BREAK_ALLOWANCE[act]} min</span>`:"");
+  }else{
+    $("clockState").innerHTML=`<span class="badge b1">Working since ${esc(hhmm(open.time_in))}</span>`;
+  }
+
+  /* buttons */
+  const btn=(id,label,cls)=>`<button class="btn ${cls}" data-clock="${id}">${label}</button>`;
+  let html="";
+  if(!open){
+    html=btn("in","Log in","a");
+  }else if(act){
+    html=btn(act+"_in","End "+BREAK_LABEL[act].toLowerCase(),"a");
+  }else{
+    if(!open.break1_out) html+=btn("break1_out","Start 1st 15-min break","g");
+    if(!open.lunch_out)  html+=btn("lunch_out","Start lunch","g");
+    if(!open.break2_out) html+=btn("break2_out","Start 2nd 15-min break","g");
+    html+=btn("out","Log out","d");
+  }
+  $("clockButtons").innerHTML=html;
+  document.querySelectorAll("[data-clock]").forEach(b=>b.onclick=()=>clockAction(b.dataset.clock));
+
+  $("clockNote").textContent = !open ? ""
+    : act ? "Remember to end your break when you return."
+    : "Log out at the end of your shift.";
+
+  /* today's breakdown */
+  if(open){
+    const c=computeHours({...open,time_out:nowTime()});
+    const row=(label,mins,allow)=>{
+      if(!mins)return "";
+      const over=allow&&mins>allow;
+      return `<tr><td>${label}</td><td class="right mono">${mins} min</td>
+        <td>${over?`<span class="badge b4">over by ${mins-allow}</span>`
+                  :allow?`<span class="badge b1">within ${allow}</span>`:""}</td></tr>`;
+    };
+    const rows=row("1st 15-minute break",c.break1,15)+
+               row("Lunch (unpaid)",c.lunch,60)+
+               row("2nd 15-minute break",c.break2,15);
+    $("todayBreakdown").innerHTML=rows?
+      `<h4>Today so far</h4><table><tbody>${rows}
+       <tr><td><strong>Hours worked</strong></td>
+           <td class="right mono"><strong>${c.netHrs.toFixed(1)}</strong></td><td></td></tr>
+       </tbody></table>`:"";
+  }else{
+    $("todayBreakdown").innerHTML="";
+  }
+
+  /* recent entries */
   const mine=D.logs.filter(l=>l.employee_id===ME.id).slice(0,14);
-  $("myLogRows").innerHTML=mine.length?mine.map(l=>
-    `<tr><td>${esc(l.log_date)}</td><td>${esc((l.time_in||"").slice(0,5))}</td>
-     <td>${l.time_out?esc(l.time_out.slice(0,5)):"—"}</td>
-     <td class="right mono">${l.time_out?Number(l.hours).toFixed(1):"—"}</td></tr>`).join("")
-    :`<tr><td colspan="4" class="empty">No entries yet.</td></tr>`;
+  $("myLogRows").innerHTML=mine.length?mine.map(l=>{
+    const c=computeHours(l);
+    const over=(c.break1>15?1:0)+(c.lunch>60?1:0)+(c.break2>15?1:0);
+    return `<tr><td>${esc(l.log_date)}</td><td>${esc(hhmm(l.time_in))}</td>
+      <td>${l.time_out?esc(hhmm(l.time_out)):"—"}</td>
+      <td class="right mono">${c.breakTotal?c.breakTotal+" min":"—"}
+        ${over?`<br><span class="badge b4">over</span>`:""}</td>
+      <td class="right mono">${l.time_out?c.netHrs.toFixed(1):"—"}</td></tr>`;
+  }).join(""):`<tr><td colspan="5" class="empty">No entries yet.</td></tr>`;
 }
-$("inBtn").onclick=async()=>{
-  if(openEntry()){toast("You are already logged in.");return;}
-  const r=await db("time_logs","insert",{employee_id:ME.id,log_date:today(),
-    time_in:new Date().toTimeString().slice(0,8)});
-  if(r)await loadAll();
-};
-$("outBtn").onclick=async()=>{
-  const o=openEntry(); if(!o){toast("You are not logged in.");return;}
-  const out=new Date().toTimeString().slice(0,8);
-  const hrs=hoursBetween(o.time_in.slice(0,5),out.slice(0,5));
-  const r=await db("time_logs","update",{time_out:out,hours:hrs},o.id);
-  if(r){await loadAll();toast(`Logged out. ${hrs.toFixed(1)} hours recorded.`);}
-};
+
+async function clockAction(what){
+  const open=openEntry();
+  if(what==="in"){
+    if(open){toast("You are already logged in.");return;}
+    const r=await db("time_logs","insert",
+      {employee_id:ME.id,log_date:today(),time_in:nowTime(),source:"manual"});
+    if(r)await loadAll();
+    return;
+  }
+  if(!open){toast("You are not logged in.");return;}
+
+  if(what==="out"){
+    const act=activeBreak(open);
+    if(act){toast(`End your ${BREAK_LABEL[act].toLowerCase()} before logging out.`);return;}
+    const patch={time_out:nowTime()};
+    const c=computeHours({...open,...patch});
+    patch.hours=c.grossHrs; patch.net_hours=c.netHrs; patch.break_minutes=c.breakTotal;
+    const r=await db("time_logs","update",patch,open.id);
+    if(r){await loadAll();
+      toast(`Logged out. ${c.netHrs.toFixed(1)} hours worked`+
+            (c.lunch?`, ${c.lunch} min unpaid lunch deducted.`:"."));}
+    return;
+  }
+
+  /* break start / end */
+  const key=what;                       // e.g. break1_out, lunch_in
+  const kind=key.split("_")[0];
+  if(key.endsWith("_out")){
+    if(activeBreak(open)){toast("End your current break first.");return;}
+    const r=await db("time_logs","update",{[key]:nowTime()},open.id);
+    if(r)await loadAll();
+  }else{
+    const taken=minsBetween(open[kind+"_out"],nowTime());
+    const allow=BREAK_ALLOWANCE[kind];
+    if(taken>allow&&!confirm(
+       `That break ran ${taken} minutes, ${taken-allow} over the ${allow}-minute allowance. `+
+       `The actual time will be recorded. Continue?`))return;
+    const r=await db("time_logs","update",{[key]:nowTime()},open.id);
+    if(r)await loadAll();
+  }
+}
 
 /* ===================== LEAVE ===================== */
 const ENTITLE={Vacation:15,Sick:15,Emergency:5,Bereavement:3};
@@ -1382,15 +1525,28 @@ function renderAtt(){
   const rows=D.logs.filter(l=>(!e||l.employee_id===e)&&(!d||l.log_date===d));
   $("attRows").innerHTML=rows.length?rows.map(l=>{
     const w=empById(l.employee_id)||{};
+    const c=computeHours(l);
+    const cell=(mins,allow)=>{
+      if(!mins)return "—";
+      return mins>allow
+        ? `<span class="badge b4">${mins}m</span>`
+        : `<span class="mono">${mins}m</span>`;
+    };
     return `<tr><td>${esc(l.log_date)}</td><td>${esc(w.name)}</td>
-      <td>${esc((l.time_in||"").slice(0,5))}</td><td>${l.time_out?esc(l.time_out.slice(0,5)):"—"}</td>
-      <td class="right mono">${l.time_out?Number(l.hours).toFixed(1):"open"}</td></tr>`;
-  }).join(""):`<tr><td colspan="5" class="empty">No entries match.</td></tr>`;
+      <td>${esc(hhmm(l.time_in))}</td><td>${l.time_out?esc(hhmm(l.time_out)):"—"}</td>
+      <td>${cell(c.break1,15)}</td><td>${cell(c.lunch,60)}</td><td>${cell(c.break2,15)}</td>
+      <td class="right mono">${l.time_out?c.netHrs.toFixed(1):"open"}</td></tr>`;
+  }).join(""):`<tr><td colspan="8" class="empty">No entries match.</td></tr>`;
 }
 $("attEmp").onchange=renderAtt; $("attDate").onchange=renderAtt;
 $("attClear").onclick=()=>{$("attEmp").value="";$("attDate").value="";renderAtt();};
-$("expAtt").onclick=()=>csv("discover-attendance.csv",["Date","Employee","In","Out","Hours"],
-  D.logs.map(l=>[l.log_date,(empById(l.employee_id)||{}).name,l.time_in,l.time_out,l.hours]));
+$("expAtt").onclick=()=>csv("discover-attendance.csv",
+  ["Date","Employee","In","Out","1st break (min)","Lunch (min)","2nd break (min)",
+   "Total break (min)","Gross hours","Hours worked"],
+  D.logs.map(l=>{const c=computeHours(l);
+    return [l.log_date,(empById(l.employee_id)||{}).name,hhmm(l.time_in),hhmm(l.time_out),
+            c.break1||"",c.lunch||"",c.break2||"",c.breakTotal||"",
+            l.time_out?c.grossHrs:"",l.time_out?c.netHrs:""];}));
 
 /* ===================== PAYROLL ===================== */
 const payDraft={};
@@ -1814,7 +1970,7 @@ $("bioConfirm").onclick=async()=>{
   if(!imp)return;
   const importId=imp[0].id;
   const payload=toAdd.map(p=>({employee_id:p.employee_id,log_date:p.log_date,
-    time_in:p.time_in,time_out:p.time_out,hours:p.hours,
+    time_in:p.time_in,time_out:p.time_out,hours:p.hours,net_hours:p.hours,
     source:"biometric",import_id:importId}));
   // insert in batches to stay well under request limits
   for(let i=0;i<payload.length;i+=200){
@@ -2009,9 +2165,12 @@ function renderDash(){
       <div class="tile"><div class="n" style="color:var(--high)">${openComp}</div><div class="l">Open compliance</div></div>
       <div class="tile"><div class="n" style="color:var(--lock)">${contractors}</div><div class="l">Contractors</div></div>`;
     const inToday=D.logs.filter(l=>l.log_date===today());
-    $("dashToday").innerHTML=inToday.length?`<table><tbody>${inToday.map(l=>
-      `<tr><td>${esc((empById(l.employee_id)||{}).name)}</td><td>${esc((l.time_in||"").slice(0,5))}</td>
-       <td>${l.time_out?esc(l.time_out.slice(0,5)):`<span class="badge b1">In</span>`}</td></tr>`).join("")}</tbody></table>`
+    $("dashToday").innerHTML=inToday.length?`<table><tbody>${inToday.map(l=>{
+      const ab=activeBreak(l);
+      return `<tr><td>${esc((empById(l.employee_id)||{}).name)}</td><td>${esc(hhmm(l.time_in))}</td>
+       <td>${l.time_out?esc(hhmm(l.time_out))
+             :ab?`<span class="badge b2">On break</span>`
+             :`<span class="badge b1">In</span>`}</td></tr>`;}).join("")}</tbody></table>`
       :`<p class="empty">Nobody has logged in today.</p>`;
     const items=[];
     if(pend)items.push(`${pend} leave request${pend>1?"s":""} awaiting a decision`);
@@ -2039,8 +2198,11 @@ function renderDash(){
       <div class="tile"><div class="n">${Math.round(mineOnb/total*100)}%</div><div class="l">Onboarding complete</div></div>`;
     const open=openEntry();
     const mine=D.logs.filter(l=>l.employee_id===ME.id&&l.log_date===today());
-    $("dashToday").innerHTML=`<p>${open?`You logged in at <strong>${esc(open.time_in.slice(0,5))}</strong>.`:
-      mine.length?"You have logged out for today.":"You have not logged in yet today."}</p>
+    const act=activeBreak(open);
+    $("dashToday").innerHTML=`<p>${
+      open ? (act ? `You are on your <strong>${BREAK_LABEL[act].toLowerCase()}</strong>.`
+                  : `You logged in at <strong>${esc(hhmm(open.time_in))}</strong>.`)
+           : mine.length?"You have logged out for today.":"You have not logged in yet today."}</p>
       <div class="row"><button class="btn g small" onclick="go('clock')">Go to time log</button></div>`;
     const items=[];
     const due=D.deliverables.filter(d=>d.employee_id===ME.id&&d.due_date&&d.due_date<today()&&d.status!=="Done").length;
