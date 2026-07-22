@@ -193,6 +193,9 @@ tr:hover td{background:var(--soft)}
     <button class="nav" data-v="deliver">Deliverables</button>
     <button class="nav" data-v="myperf">My performance</button>
     <button class="nav" data-v="myrecords">My records</button>
+    <div class="navgrp recOnly">Recruitment</div>
+    <button class="nav recOnly" data-v="pipeline">Applicant pipeline</button>
+    <button class="nav recOnly" data-v="addapp">Add applicant</button>
     <div class="navgrp hrOnly">HR administration</div>
     <button class="nav hrOnly" data-v="directory">Employee directory</button>
     <button class="nav hrOnly" data-v="approvals">Leave approvals</button>
@@ -299,6 +302,10 @@ tr:hover td{background:var(--soft)}
               <div><label>Contract end / regularization</label><input type="date" id="c_end"></div>
               <div><label>Basic monthly rate (₱)</label><input type="number" id="c_rate"></div>
               <div><label>Work schedule</label><input type="text" id="c_sched" placeholder="Mon–Fri 9:00–18:00"></div>
+              <div><label>Portal access level</label><select id="c_hrrole">
+                <option value="">Employee — own record only</option>
+                <option value="recruitment">HR Recruitment — applicants only</option>
+                <option value="relations">HR Employee Relations — full access</option></select></div>
             </div>
             <div class="row" style="margin-top:14px"><button class="btn" id="saveContract">Save contract</button></div>
           </div>
@@ -519,6 +526,52 @@ tr:hover td{background:var(--soft)}
         <tbody id="perfRows"></tbody></table></div>
     </section>
 
+    <!-- APPLICANT PIPELINE (recruitment) -->
+    <section data-view="pipeline" class="hidden">
+      <div class="head"><div><h2>Applicant pipeline</h2>
+        <p>Candidates in progress. Move them through the stages as they advance.</p></div>
+        <div class="row"><button class="btn g" id="expApp">Export CSV</button></div></div>
+      <div class="tiles" id="appTiles"></div>
+      <div class="card">
+        <div class="row" style="margin-bottom:12px">
+          <input type="text" id="appSearch" placeholder="Search name, position" style="flex:1;min-width:180px">
+          <select id="appStageFilter" style="width:auto"><option value="">All stages</option>
+            <option>Applied</option><option>Screening</option><option>Interview</option>
+            <option>Final interview</option><option>Offer</option><option>Hired</option>
+            <option>Rejected</option><option>Withdrawn</option></select>
+        </div>
+        <table><thead><tr><th>Applicant</th><th>Position</th><th>Applied</th>
+          <th>Stage</th><th>Interview</th><th></th></tr></thead>
+        <tbody id="appRowsList"></tbody></table>
+      </div>
+      <div class="card hidden" id="appDetail"></div>
+    </section>
+
+    <!-- ADD APPLICANT (recruitment) -->
+    <section data-view="addapp" class="hidden">
+      <div class="head"><div><h2>Add applicant</h2>
+        <p>Record a new candidate. Only recruitment and HR employee relations can see this.</p></div></div>
+      <div class="card">
+        <h3>Candidate details</h3>
+        <div class="grid">
+          <div><label>First name</label><input type="text" id="ap_first"></div>
+          <div><label>Last name</label><input type="text" id="ap_last"></div>
+          <div><label>Email</label><input type="text" id="ap_email"></div>
+          <div><label>Mobile</label><input type="text" id="ap_phone"></div>
+          <div><label>Position applied for</label><input type="text" id="ap_pos"></div>
+          <div><label>Department</label><input type="text" id="ap_dept"></div>
+          <div><label>Source</label><select id="ap_source">
+            <option>Referral</option><option>Job board</option><option>Walk-in</option>
+            <option>Social media</option><option>Agency</option><option>Other</option></select></div>
+          <div><label>Expected rate</label><input type="text" id="ap_rate" placeholder="e.g. 18,000/month"></div>
+        </div>
+        <div style="margin-top:12px"><label>Notes</label>
+          <textarea id="ap_notes" rows="3" placeholder="Background, availability, anything relevant."></textarea></div>
+        <div class="row" style="margin-top:14px">
+          <button class="btn" id="addApplicant">Add to pipeline</button></div>
+      </div>
+    </section>
+
     <!-- PAYROLL (HR CONFIDENTIAL) -->
     <section data-view="payroll" class="hidden">
       <div class="head"><div><h2>Payroll sheet</h2><p>Confidential. Visible to HR administrators only.</p></div>
@@ -730,8 +783,9 @@ const today=()=>new Date().toISOString().slice(0,10);
 
 let ME=null;          // my employees row
 let ROLE="employee";
+let HRROLE="employee";   // employee | recruitment | relations
 let VIEWING=null;     // employee whose file HR is viewing
-let D={employees:[],logs:[],leave:[],deliverables:[],onboarding:[],compliance:[],payruns:[],assessments:[],reviews:[],imports:[]};
+let D={employees:[],logs:[],leave:[],deliverables:[],onboarding:[],compliance:[],payruns:[],assessments:[],reviews:[],imports:[],applicants:[]};
 
 const ONB_DOCS=["Signed contract returned","NBI clearance","Birth certificate (PSA)","SSS number / E-1",
  "PhilHealth MDR","Pag-IBIG number","TIN / BIR 1902 or 2305","2x2 ID photos","Certificate of employment (previous)",
@@ -816,13 +870,20 @@ async function afterLogin(){
     msg("Your login works, but no employee record is linked to it. Ask HR to add you to the directory.","err");
     await sb.auth.signOut(); showLogin(); return;
   }
-  ME=emp; VIEWING=emp; ROLE=emp.is_hr?"hr":"employee";
+  ME=emp; VIEWING=emp;
+  HRROLE=emp.hr_role||"employee";
+  ROLE=HRROLE==="relations"?"hr":"employee";
   $("boot").style.display="none";
   $("login").style.display="none";
   $("app").classList.add("on");
-  document.querySelectorAll(".hrOnly").forEach(n=>n.classList.toggle("hidden",ROLE!=="hr"));
+  document.querySelectorAll(".hrOnly").forEach(n=>n.classList.toggle("hidden",HRROLE!=="relations"));
+  document.querySelectorAll(".recOnly").forEach(n=>
+    n.classList.toggle("hidden",HRROLE!=="recruitment"&&HRROLE!=="relations"));
   $("whoName").textContent=emp.name;
-  $("whoRole").textContent=ROLE==="hr"?"HR administrator · full access":(emp.position||"Employee");
+  $("whoRole").textContent=
+     HRROLE==="relations"   ? "HR Employee Relations · full access"
+   : HRROLE==="recruitment" ? "HR Recruitment · applicants only"
+   : (emp.position||"Employee");
   buildQuestions();
   await loadAll();
   go("dash");
@@ -848,14 +909,18 @@ async function loadAll(){
     // employees see only records RLS has already filtered to issued-to-them
     jobs.push(sb.from("compliance_records").select("*").order("created_at",{ascending:false}));
   }
+  if(HRROLE==="recruitment"||HRROLE==="relations"){
+    jobs.push(sb.from("applicants").select("*").order("created_at",{ascending:false}));
+  }
   const r=await Promise.all(jobs);
   const bad=r.find(x=>x.error);
   if(bad){console.error(bad.error);}
   D.employees=r[0].data||[]; D.logs=r[1].data||[]; D.leave=r[2].data||[];
   D.deliverables=r[3].data||[]; D.onboarding=r[4].data||[]; D.reviews=r[5].data||[];
   if(ROLE==="hr"){D.compliance=r[6].data||[];D.payruns=r[7].data||[];D.assessments=r[8].data||[];
-                  D.imports=r[9].data||[];}
-  else{D.compliance=r[6].data||[];}
+                  D.imports=r[9].data||[];D.applicants=r[10]?.data||[];}
+  else{D.compliance=r[6].data||[];
+       if(HRROLE==="recruitment")D.applicants=r[7]?.data||[];}
   if(ME){const fresh=D.employees.find(e=>e.id===ME.id); if(fresh)ME=fresh;}
   if(VIEWING){const f=D.employees.find(e=>e.id===VIEWING.id); if(f)VIEWING=f;}
   render();
@@ -961,6 +1026,7 @@ function renderContract(){
   $("c_end").value=e.contract_end||"";
   $("c_rate").value=e.monthly_rate||"";
   $("c_sched").value=e.schedule||"";
+  $("c_hrrole").value=e.hr_role||"";
   $("c_purpose").value=e.role_purpose||"";
   $("c_duties").value=e.duties||"";
   $("c_reports").value=e.reports_to||"";
@@ -970,9 +1036,11 @@ function renderContract(){
 }
 $("saveContract").onclick=async()=>{
   const e=subject();
+  const role=$("c_hrrole").value||null;
   const r=await db("employees","update",{employment_type:$("c_type").value,status:$("c_status").value,
     contract_start:$("c_start").value||null,contract_end:$("c_end").value||null,
-    monthly_rate:$("c_rate").value||null,schedule:$("c_sched").value},e.id);
+    monthly_rate:$("c_rate").value||null,schedule:$("c_sched").value,
+    hr_role:role,is_hr:role==="relations"},e.id);
   if(r){await loadAll();toast("Contract updated.");}
 };
 $("saveJD").onclick=async()=>{
@@ -1053,16 +1121,22 @@ function renderClock(){
 
   /* buttons */
   const btn=(id,label,cls)=>`<button class="btn ${cls}" data-clock="${id}">${label}</button>`;
+  const done=(label,mins)=>`<span class="badge b1" style="padding:8px 12px">${label} taken${
+      mins?` · ${mins} min`:""}</span>`;
   let html="";
   if(!open){
     html=btn("in","Log in","a");
   }else if(act){
     html=btn(act+"_in","End "+BREAK_LABEL[act].toLowerCase(),"a");
   }else{
-    if(!open.break1_out) html+=btn("break1_out","Start 1st 15-min break","g");
-    if(!open.lunch_out)  html+=btn("lunch_out","Start lunch","g");
-    if(!open.break2_out) html+=btn("break2_out","Start 2nd 15-min break","g");
-    html+=btn("out","Log out","d");
+    const b=breakMins(open);
+    html += open.break1_in ? done("1st break",b.break1)
+          : btn("break1_out","Start 1st 15-min break","g");
+    html += open.lunch_in  ? done("Lunch",b.lunch)
+          : btn("lunch_out","Start lunch","g");
+    html += open.break2_in ? done("2nd break",b.break2)
+          : btn("break2_out","Start 2nd 15-min break","g");
+    html += btn("out","Log out","d");
   }
   $("clockButtons").innerHTML=html;
   document.querySelectorAll("[data-clock]").forEach(b=>b.onclick=()=>clockAction(b.dataset.clock));
@@ -1074,16 +1148,16 @@ function renderClock(){
   /* today's breakdown */
   if(open){
     const c=computeHours({...open,time_out:nowTime()});
-    const row=(label,mins,allow)=>{
-      if(!mins)return "";
+    const row=(label,mins,allow,taken)=>{
+      if(!taken)return "";
       const over=allow&&mins>allow;
-      return `<tr><td>${label}</td><td class="right mono">${mins} min</td>
+      return `<tr><td>${label}</td><td class="right mono">${mins?mins+" min":"<1 min"}</td>
         <td>${over?`<span class="badge b4">over by ${mins-allow}</span>`
-                  :allow?`<span class="badge b1">within ${allow}</span>`:""}</td></tr>`;
+                  :`<span class="badge b1">within ${allow}</span>`}</td></tr>`;
     };
-    const rows=row("1st 15-minute break",c.break1,15)+
-               row("Lunch (unpaid)",c.lunch,60)+
-               row("2nd 15-minute break",c.break2,15);
+    const rows=row("1st 15-minute break",c.break1,15,open.break1_in)+
+               row("Lunch (unpaid)",c.lunch,60,open.lunch_in)+
+               row("2nd 15-minute break",c.break2,15,open.break2_in);
     $("todayBreakdown").innerHTML=rows?
       `<h4>Today so far</h4><table><tbody>${rows}
        <tr><td><strong>Hours worked</strong></td>
@@ -1098,9 +1172,10 @@ function renderClock(){
   $("myLogRows").innerHTML=mine.length?mine.map(l=>{
     const c=computeHours(l);
     const over=(c.break1>15?1:0)+(c.lunch>60?1:0)+(c.break2>15?1:0);
+    const anyBreak=l.break1_in||l.lunch_in||l.break2_in;
     return `<tr><td>${esc(l.log_date)}</td><td>${esc(hhmm(l.time_in))}</td>
       <td>${l.time_out?esc(hhmm(l.time_out)):"—"}</td>
-      <td class="right mono">${c.breakTotal?c.breakTotal+" min":"—"}
+      <td class="right mono">${c.breakTotal?c.breakTotal+" min":(anyBreak?"<1 min":"—")}
         ${over?`<br><span class="badge b4">over</span>`:""}</td>
       <td class="right mono">${l.time_out?c.netHrs.toFixed(1):"—"}</td></tr>`;
   }).join(""):`<tr><td colspan="5" class="empty">No entries yet.</td></tr>`;
@@ -1421,6 +1496,133 @@ function renderMyRecords(){
   });
 }
 
+/* ===================== APPLICANTS (recruitment) ===================== */
+const STAGES=["Applied","Screening","Interview","Final interview","Offer","Hired","Rejected","Withdrawn"];
+const STAGE_CLS={Applied:"bg",Screening:"t-prob",Interview:"b2","Final interview":"t-proj",
+                 Offer:"t-part",Hired:"b1",Rejected:"b4",Withdrawn:"bg"};
+
+$("addApplicant").onclick=async()=>{
+  const f=$("ap_first").value.trim(),l=$("ap_last").value.trim();
+  if(!f||!l){toast("Enter the applicant's first and last name.");return;}
+  const r=await db("applicants","insert",{
+    first_name:f,last_name:l,email:$("ap_email").value||null,phone:$("ap_phone").value||null,
+    position_applied:$("ap_pos").value||null,department:$("ap_dept").value||null,
+    source:$("ap_source").value,expected_rate:$("ap_rate").value||null,
+    notes:$("ap_notes").value||null,stage:"Applied",created_by:ME.id});
+  if(r){
+    ["ap_first","ap_last","ap_email","ap_phone","ap_pos","ap_dept","ap_rate","ap_notes"]
+      .forEach(i=>$(i).value="");
+    await loadAll(); go("pipeline");
+    toast(`${f} ${l} added to the pipeline.`);
+  }
+};
+
+function renderApplicants(){
+  const A=D.applicants||[];
+  const c={};STAGES.forEach(s=>c[s]=0);
+  A.forEach(a=>{if(c[a.stage]!==undefined)c[a.stage]++;});
+  const activeN=A.filter(a=>!["Hired","Rejected","Withdrawn"].includes(a.stage)).length;
+  $("appTiles").innerHTML=`
+    <div class="tile"><div class="n">${A.length}</div><div class="l">Total applicants</div></div>
+    <div class="tile"><div class="n" style="color:var(--accent)">${activeN}</div><div class="l">In progress</div></div>
+    <div class="tile"><div class="n" style="color:var(--mod)">${c["Interview"]+c["Final interview"]}</div><div class="l">At interview</div></div>
+    <div class="tile"><div class="n" style="color:var(--low)">${c["Hired"]}</div><div class="l">Hired</div></div>
+    <div class="tile"><div class="n" style="color:var(--crit)">${c["Rejected"]}</div><div class="l">Rejected</div></div>`;
+
+  const q=($("appSearch").value||"").toLowerCase(), sf=$("appStageFilter").value;
+  const rows=A.filter(a=>(!sf||a.stage===sf)&&
+    ((a.first_name||"")+" "+(a.last_name||"")+(a.position_applied||"")).toLowerCase().includes(q));
+  $("appRowsList").innerHTML=rows.length?rows.map(a=>
+    `<tr><td><strong>${esc(a.first_name)} ${esc(a.last_name)}</strong>
+       ${a.email?`<br><span class="note">${esc(a.email)}</span>`:""}</td>
+     <td>${esc(a.position_applied||"—")}<br><span class="note">${esc(a.department||"")}</span></td>
+     <td>${esc(String(a.created_at).slice(0,10))}<br><span class="note">${esc(a.source||"")}</span></td>
+     <td><select data-astage="${a.id}" style="padding:4px">
+       ${STAGES.map(s=>`<option ${a.stage===s?"selected":""}>${s}</option>`).join("")}</select></td>
+     <td>${a.interview_date?esc(a.interview_date):"—"}</td>
+     <td><button class="btn g small" data-aopen="${a.id}">Open</button>
+         <button class="btn g small" data-adel="${a.id}">Remove</button></td></tr>`).join("")
+    :`<tr><td colspan="6" class="empty">No applicants match.</td></tr>`;
+
+  document.querySelectorAll("[data-astage]").forEach(s=>s.onchange=async()=>{
+    const stage=s.value;
+    if(stage==="Hired"&&HRROLE!=="relations"){
+      toast("Only HR Employee Relations can complete a hire and create the employee record.");
+    }
+    await db("applicants","update",{stage,updated_at:new Date().toISOString()},s.dataset.astage);
+    await loadAll();
+  });
+  document.querySelectorAll("[data-adel]").forEach(b=>b.onclick=async()=>{
+    if(!confirm("Remove this applicant permanently?"))return;
+    await db("applicants","delete",null,b.dataset.adel); await loadAll();
+  });
+  document.querySelectorAll("[data-aopen]").forEach(b=>b.onclick=()=>openApplicant(b.dataset.aopen));
+}
+
+function openApplicant(id){
+  const a=(D.applicants||[]).find(x=>x.id===id); if(!a)return;
+  $("appDetail").classList.remove("hidden");
+  $("appDetail").innerHTML=`
+    <h3>${esc(a.first_name)} ${esc(a.last_name)} — ${esc(a.position_applied||"")}</h3>
+    <table>
+      <tr><th style="width:170px">Stage</th><td><span class="badge ${STAGE_CLS[a.stage]||"bg"}">${esc(a.stage)}</span></td></tr>
+      <tr><th>Email</th><td>${esc(a.email||"—")}</td></tr>
+      <tr><th>Mobile</th><td>${esc(a.phone||"—")}</td></tr>
+      <tr><th>Source</th><td>${esc(a.source||"—")}</td></tr>
+      <tr><th>Expected rate</th><td>${esc(a.expected_rate||"—")}</td></tr>
+      <tr><th>Applied</th><td>${esc(String(a.created_at).slice(0,10))}</td></tr>
+    </table>
+    ${a.notes?`<h4>Notes</h4><p>${esc(a.notes)}</p>`:""}
+    <h4>Interview</h4>
+    <div class="grid">
+      <div><label>Interview date</label><input type="date" id="ai_date" value="${esc(a.interview_date||"")}"></div>
+      <div><label>Rating (1–5)</label><input type="number" id="ai_rating" min="1" max="5" value="${a.rating??""}"></div>
+    </div>
+    <div style="margin-top:12px"><label>Interview notes</label>
+      <textarea id="ai_notes" rows="4">${esc(a.interview_notes||"")}</textarea></div>
+    ${["Rejected","Withdrawn"].includes(a.stage)?`
+      <div style="margin-top:12px"><label>Reason</label>
+        <input type="text" id="ai_reason" value="${esc(a.rejected_reason||"")}"></div>`:""}
+    <div class="row" style="margin-top:14px">
+      <button class="btn" data-asave="${a.id}">Save</button>
+      <button class="btn g" id="aiClose">Close</button>
+      ${a.stage==="Offer"&&HRROLE==="relations"?
+        `<button class="btn a" data-ahire="${a.id}">Hire — create employee record</button>`:""}
+    </div>`;
+  $("aiClose").onclick=()=>$("appDetail").classList.add("hidden");
+  document.querySelector(`[data-asave="${a.id}"]`).onclick=async()=>{
+    const patch={interview_date:$("ai_date").value||null,
+      rating:$("ai_rating").value?Number($("ai_rating").value):null,
+      interview_notes:$("ai_notes").value||null,updated_at:new Date().toISOString()};
+    const rr=$("ai_reason"); if(rr&&rr.value!==undefined)patch.rejected_reason=rr.value||null;
+    const r=await db("applicants","update",patch,a.id);
+    if(r){await loadAll();toast("Applicant updated.");}
+  };
+  const hb=document.querySelector(`[data-ahire="${a.id}"]`);
+  if(hb)hb.onclick=async()=>{
+    if(!confirm(`Create an employee record for ${a.first_name} ${a.last_name}?`))return;
+    const emp=await db("employees","insert",{
+      name:`${a.first_name} ${a.last_name}`,position:a.position_applied,department:a.department,
+      email:a.email,phone:a.phone,employment_type:"Probationary",status:"Active",
+      date_started:today(),contract_start:today()});
+    if(emp){
+      await db("applicants","update",
+        {stage:"Hired",hired_employee_id:emp[0].id,updated_at:new Date().toISOString()},a.id);
+      await loadAll();
+      toast(`${a.first_name} added to the employee directory as Probationary.`);
+      $("appDetail").classList.add("hidden");
+    }
+  };
+}
+$("appSearch").oninput=renderApplicants;
+$("appStageFilter").onchange=renderApplicants;
+$("expApp").onclick=()=>csv("discover-applicants.csv",
+  ["First name","Last name","Email","Mobile","Position","Department","Source",
+   "Stage","Applied","Interview date","Rating","Expected rate","Notes"],
+  (D.applicants||[]).map(a=>[a.first_name,a.last_name,a.email,a.phone,a.position_applied,
+    a.department,a.source,a.stage,String(a.created_at).slice(0,10),
+    a.interview_date,a.rating,a.expected_rate,a.notes]));
+
 /* ===================== DIRECTORY ===================== */
 $("newEmpBtn").onclick=()=>$("newEmpCard").classList.remove("hidden");
 $("cancelEmp").onclick=()=>$("newEmpCard").classList.add("hidden");
@@ -1457,7 +1659,9 @@ function renderDir(){
     ((e.name||"")+(e.position||"")+(e.department||"")).toLowerCase().includes(q));
   $("dirRows").innerHTML=rows.length?rows.map(e=>{
     const sc={Active:"b1","On leave":"b2",Separated:"bg"}[e.status||"Active"];
-    return `<tr><td><strong>${esc(e.name)}</strong>${e.is_hr?' <span class="badge ba">HR</span>':""}
+    return `<tr><td><strong>${esc(e.name)}</strong>${
+        e.hr_role==="relations"?' <span class="badge ba">HR Relations</span>'
+        :e.hr_role==="recruitment"?' <span class="badge t-prob">Recruitment</span>':""}
         ${e.user_id?"":'<br><span class="note">No login yet</span>'}</td>
       <td>${esc(e.position)}</td><td>${esc(e.department)}</td>
       <td>${typeBadge(e.employment_type)}</td>
@@ -1526,15 +1730,17 @@ function renderAtt(){
   $("attRows").innerHTML=rows.length?rows.map(l=>{
     const w=empById(l.employee_id)||{};
     const c=computeHours(l);
-    const cell=(mins,allow)=>{
-      if(!mins)return "—";
+    const cell=(mins,allow,taken)=>{
+      if(!taken)return "—";
+      if(!mins)return `<span class="mono">&lt;1m</span>`;
       return mins>allow
         ? `<span class="badge b4">${mins}m</span>`
         : `<span class="mono">${mins}m</span>`;
     };
     return `<tr><td>${esc(l.log_date)}</td><td>${esc(w.name)}</td>
       <td>${esc(hhmm(l.time_in))}</td><td>${l.time_out?esc(hhmm(l.time_out)):"—"}</td>
-      <td>${cell(c.break1,15)}</td><td>${cell(c.lunch,60)}</td><td>${cell(c.break2,15)}</td>
+      <td>${cell(c.break1,15,l.break1_in)}</td><td>${cell(c.lunch,60,l.lunch_in)}</td>
+      <td>${cell(c.break2,15,l.break2_in)}</td>
       <td class="right mono">${l.time_out?c.netHrs.toFixed(1):"open"}</td></tr>`;
   }).join(""):`<tr><td colspan="8" class="empty">No entries match.</td></tr>`;
 }
@@ -2226,6 +2432,7 @@ function render(){
     renderDash(); renderProfile(); renderContract(); renderClock();
     renderLeave(); renderOnboard(); renderDeliv();
     renderMyPerf(); renderMyRecords();
+    if(HRROLE==="recruitment"||HRROLE==="relations")renderApplicants();
     if(ROLE==="hr"){renderDir();renderApprovals();renderAtt();renderPay();
       renderPayHist();renderComp();renderAssess();renderHRPerf();renderBioHist();}
   }catch(err){console.error(err);}
