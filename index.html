@@ -103,6 +103,11 @@ tr:hover td{background:var(--soft)}
 .right{text-align:right}
 @media(max-width:760px){#app.on{grid-template-columns:1fr}aside{position:static;height:auto}main{padding:18px}}
 
+.pwwrap{position:relative}
+.pwwrap input{padding-right:62px!important}
+.pwtog{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;
+  color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;padding:4px 6px;letter-spacing:.04em}
+.pwtog:hover{color:var(--ink)}
 .msg{padding:10px 12px;font-size:13px;margin-top:14px;border-left:3px solid}
 .msg.err{background:#fdf0f0;border-color:var(--crit);color:#7d1a24}
 .msg.ok{background:#eef7f2;border-color:var(--low);color:#1d5340}
@@ -127,7 +132,10 @@ tr:hover td{background:var(--soft)}
       <label>Email</label>
       <input type="text" id="li_email" autocomplete="username" placeholder="you@discovergroup.com">
       <label>Password</label>
-      <input type="password" id="li_pass" autocomplete="current-password">
+      <div class="pwwrap">
+        <input type="password" id="li_pass" autocomplete="current-password">
+        <button type="button" class="pwtog" data-for="li_pass">Show</button>
+      </div>
       <button id="signinBtn">Sign in</button>
       <p class="hint">Employees see their own record. HR administrators see everyone, plus payroll and the confidential compliance file.</p>
       <p class="hint" style="margin-top:10px">
@@ -138,12 +146,17 @@ tr:hover td{background:var(--soft)}
     <div id="setupPane" class="hidden">
       <p class="hint" style="margin:0 0 12px">
         This creates the first HR administrator. Run this once, then add everyone else from the directory.</p>
-      <label>Full name</label>
-      <input type="text" id="su_name">
+      <label>First name</label>
+      <input type="text" id="su_first">
+      <label>Last name</label>
+      <input type="text" id="su_last">
       <label>Email</label>
       <input type="text" id="su_email" autocomplete="username">
       <label>Password</label>
-      <input type="password" id="su_pass" autocomplete="new-password" placeholder="At least 8 characters">
+      <div class="pwwrap">
+        <input type="password" id="su_pass" autocomplete="new-password" placeholder="At least 8 characters">
+        <button type="button" class="pwtog" data-for="su_pass">Show</button>
+      </div>
       <button id="setupBtn">Create HR account</button>
       <p class="hint" style="margin-top:10px">
         <a href="#" id="toSignin" style="color:var(--accent)">Back to sign in</a></p>
@@ -195,7 +208,8 @@ tr:hover td{background:var(--soft)}
       <div class="card">
         <h3>Personal details</h3>
         <div class="grid">
-          <div><label>Full name</label><input type="text" id="p_name"></div>
+          <div><label>First name</label><input type="text" id="p_first"></div>
+          <div><label>Last name</label><input type="text" id="p_last"></div>
           <div><label>Position</label><input type="text" id="p_pos"></div>
           <div><label>Department</label><input type="text" id="p_dept"></div>
           <div><label>Employee ID</label><input type="text" id="p_id"></div>
@@ -360,7 +374,8 @@ tr:hover td{background:var(--soft)}
       <div class="card hidden" id="newEmpCard">
         <h3>Add employee</h3>
         <div class="grid">
-          <div><label>Full name</label><input type="text" id="n_name"></div>
+          <div><label>First name</label><input type="text" id="n_first"></div>
+          <div><label>Last name</label><input type="text" id="n_last"></div>
           <div><label>Position</label><input type="text" id="n_pos"></div>
           <div><label>Department</label><input type="text" id="n_dept"></div>
           <div><label>Employment type</label><select id="n_type">
@@ -567,6 +582,15 @@ function msg(t,kind){ $("loginMsg").innerHTML=`<div class="msg ${kind}">${esc(t)
 function busy(btn,on,label){ btn.disabled=on; btn.innerHTML=on?`<span class="spin"></span>Working…`:label; }
 function toast(m){ alert(m); }
 
+/* ---- show / hide password ---- */
+document.querySelectorAll(".pwtog").forEach(b=>b.onclick=()=>{
+  const f=$(b.dataset.for);
+  const showing=f.type==="text";
+  f.type=showing?"password":"text";
+  b.textContent=showing?"Show":"Hide";
+  f.focus();
+});
+
 /* ===================== AUTH ===================== */
 $("toSetup").onclick=e=>{e.preventDefault();$("signinPane").classList.add("hidden");
   $("setupPane").classList.remove("hidden");$("loginMsg").innerHTML="";};
@@ -585,8 +609,10 @@ $("signinBtn").onclick=async()=>{
 $("li_pass").addEventListener("keydown",e=>{if(e.key==="Enter")$("signinBtn").click();});
 
 $("setupBtn").onclick=async()=>{
-  const name=$("su_name").value.trim(),email=$("su_email").value.trim(),pass=$("su_pass").value;
-  if(!name||!email||!pass){msg("Fill in all three fields.","err");return;}
+  const first=$("su_first").value.trim(),last=$("su_last").value.trim();
+  const name=(first+" "+last).trim();
+  const email=$("su_email").value.trim(),pass=$("su_pass").value;
+  if(!first||!last||!email||!pass){msg("Fill in every field.","err");return;}
   if(pass.length<8){msg("Use at least 8 characters for the password.","err");return;}
   busy($("setupBtn"),true);
   const {data,error}=await sb.auth.signUp({email,password:pass});
@@ -700,17 +726,25 @@ function csv(name,head,rows){
 
 <script>
 /* ===================== PROFILE ===================== */
-const PMAP={name:"p_name",position:"p_pos",department:"p_dept",emp_no:"p_id",phone:"p_phone",
+const PMAP={position:"p_pos",department:"p_dept",emp_no:"p_id",phone:"p_phone",
  email:"p_email",date_started:"p_start",birth_date:"p_dob",address:"p_addr",emergency_name:"p_ename",
  emergency_relation:"p_erel",emergency_phone:"p_ephone",sss:"p_sss",philhealth:"p_phic",
  pagibig:"p_hdmf",tin:"p_tin"};
+function splitName(full){
+  const p=String(full||"").trim().split(/\s+/);
+  return p.length<2?{first:p[0]||"",last:""}:{first:p.slice(0,-1).join(" "),last:p[p.length-1]};
+}
 function renderProfile(){
   const e=subject(); if(!e)return;
+  const n=splitName(e.name);
+  $("p_first").value=n.first; $("p_last").value=n.last;
   Object.entries(PMAP).forEach(([k,id])=>{const el=$(id); if(el)el.value=e[k]||"";});
 }
 $("saveProfile").onclick=async()=>{
   const e=subject(); if(!e)return;
-  const patch={};
+  const first=$("p_first").value.trim(),last=$("p_last").value.trim();
+  if(!first){toast("Enter at least a first name.");return;}
+  const patch={name:(first+" "+last).trim()};
   Object.entries(PMAP).forEach(([k,id])=>{const el=$(id); if(el)patch[k]=el.value||null;});
   const r=await db("employees","update",patch,e.id);
   if(r){await loadAll();toast("Profile saved.");}
@@ -883,13 +917,14 @@ $("addDeliv").onclick=async()=>{
 $("newEmpBtn").onclick=()=>$("newEmpCard").classList.remove("hidden");
 $("cancelEmp").onclick=()=>$("newEmpCard").classList.add("hidden");
 $("createEmp").onclick=async()=>{
-  const n=$("n_name").value.trim();
-  if(!n){toast("Enter the employee's name.");return;}
+  const nf=$("n_first").value.trim(),nl=$("n_last").value.trim();
+  const n=(nf+" "+nl).trim();
+  if(!nf||!nl){toast("Enter both the first and last name.");return;}
   const r=await db("employees","insert",{name:n,position:$("n_pos").value,department:$("n_dept").value,
     employment_type:$("n_type").value,date_started:$("n_start").value||null,
     contract_start:$("n_start").value||null,monthly_rate:$("n_rate").value||null,status:"Active"});
   if(r){
-    ["n_name","n_pos","n_dept","n_start","n_rate"].forEach(i=>$(i).value="");
+    ["n_first","n_last","n_pos","n_dept","n_start","n_rate"].forEach(i=>$(i).value="");
     $("newEmpCard").classList.add("hidden");
     await loadAll();
     toast(n+" added. To give them a login, use Invite below their row.");
