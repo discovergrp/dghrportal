@@ -123,6 +123,26 @@ tr:hover td{background:var(--soft)}
 .t-fixed{background:#66748a}   /* Fixed-term — slate */
 .legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:14px;font-size:12px}
 .legend span.badge{margin-right:5px}
+/* applicant pipeline: list beside a sticky detail panel */
+.pipegrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,420px);gap:16px;align-items:start}
+.listscroll{max-height:70vh;overflow-y:auto}
+.listscroll thead th{position:sticky;top:0;background:var(--panel);z-index:2;
+  box-shadow:0 1px 0 var(--rule)}
+#appDetailWrap{position:sticky;top:16px;max-height:calc(100vh - 32px);overflow-y:auto}
+tr.picked td{background:#e8eef7}
+tr[data-arow]{cursor:pointer}
+/* drag and drop upload */
+.dropzone{border:2px dashed var(--rule);border-radius:6px;padding:18px;text-align:center;
+  background:var(--soft);cursor:pointer;transition:background .15s,border-color .15s}
+.dropzone:hover{border-color:var(--accent);background:#eef2f8}
+.dropzone.over{border-color:var(--accent);background:#e3ebf6}
+.dropzone .big{font-weight:600;font-size:14px}
+.dropzone .sub{font-size:12px;color:var(--muted);margin-top:3px}
+@media(max-width:1100px){
+  .pipegrid{grid-template-columns:1fr}
+  #appDetailWrap{position:static;max-height:none}
+  .listscroll{max-height:none}
+}
 .msg{padding:10px 12px;font-size:13px;margin-top:14px;border-left:3px solid}
 .msg.err{background:#fdf0f0;border-color:var(--crit);color:#7d1a24}
 .msg.ok{background:#eef7f2;border-color:var(--low);color:#1d5340}
@@ -192,7 +212,6 @@ tr:hover td{background:var(--soft)}
     <div class="navgrp">My workspace</div>
     <button class="nav on" data-v="dash">Dashboard</button>
     <button class="nav" data-v="profile">My profile</button>
-    <button class="nav" data-v="contract">Contract &amp; job description</button>
     <button class="nav" data-v="clock">Time log</button>
     <button class="nav" data-v="leave">Leave</button>
     <button class="nav" data-v="onboard">Onboarding</button>
@@ -229,8 +248,10 @@ tr:hover td{background:var(--soft)}
 
     <!-- MY PROFILE -->
     <section data-view="profile" class="hidden">
-      <div class="head"><div><h2>My profile</h2><p>Keep your personal and emergency details current. HR is notified of changes.</p></div></div>
+      <div class="head"><div><h2>My profile</h2>
+        <p>Your record as held by HR. Contact HR Employee Relations to correct anything.</p></div></div>
       <div class="card">
+        <p id="profileNote" class="note" style="margin-top:0"></p>
         <h3>Personal details</h3>
         <div class="grid">
           <div><label>First name</label><input type="text" id="p_first"></div>
@@ -287,11 +308,9 @@ tr:hover td{background:var(--soft)}
         </div>
         <div class="row" style="margin-top:16px"><button class="btn" id="saveProfile">Save profile</button></div>
       </div>
-    </section>
 
-    <!-- CONTRACT -->
-    <section data-view="contract" class="hidden">
-      <div class="head"><div><h2>Contract &amp; job description</h2><p>Your current engagement terms and the duties you are accountable for.</p></div></div>
+      <div class="head" style="margin-top:26px"><div><h2>Contract &amp; job description</h2>
+        <p>Engagement terms and the duties this person is accountable for.</p></div></div>
       <div class="grid2">
         <div class="card">
           <h3>Engagement</h3>
@@ -324,7 +343,7 @@ tr:hover td{background:var(--soft)}
           <h4>Reports to</h4>
           <input type="text" id="c_reports">
           <div class="row" style="margin-top:14px"><button class="btn" id="saveJD">Save job description</button></div>
-          <p class="note">Employees can read this at any time. Only HR can edit.</p>
+          <p class="note" id="jdNote">Employees can read this at any time. Only HR can edit.</p>
         </div>
       </div>
     </section>
@@ -540,17 +559,32 @@ tr:hover td{background:var(--soft)}
       <div class="tiles" id="appTiles"></div>
       <div class="card">
         <div class="row" style="margin-bottom:12px">
-          <input type="text" id="appSearch" placeholder="Search name, position" style="flex:1;min-width:180px">
+          <input type="text" id="appSearch" placeholder="Search name, position" style="flex:1;min-width:160px">
+          <select id="appPosFilter" style="width:auto"><option value="">All positions</option></select>
           <select id="appStageFilter" style="width:auto"><option value="">All stages</option>
             <option>Applied</option><option>Screening</option><option>Interview</option>
             <option>Final interview</option><option>Offer</option><option>Hired</option>
             <option>Rejected</option><option>Withdrawn</option></select>
+          <select id="appSrcFilter" style="width:auto"><option value="">All sources</option></select>
+          <button class="btn g small" id="appClearFilters">Clear</button>
         </div>
-        <table><thead><tr><th>Applicant</th><th>Position</th><th>Applied</th>
-          <th>Stage</th><th>Interview</th><th></th></tr></thead>
-        <tbody id="appRowsList"></tbody></table>
+        <div id="appCount" class="note"></div>
       </div>
-      <div class="card hidden" id="appDetail"></div>
+
+      <div class="pipegrid">
+        <div class="card" style="padding:0">
+          <div class="listscroll">
+            <table><thead><tr><th>Applicant</th><th>Position</th><th>Applied</th>
+              <th>Stage</th><th>Interview</th><th></th></tr></thead>
+            <tbody id="appRowsList"></tbody></table>
+          </div>
+        </div>
+        <div id="appDetailWrap">
+          <div class="card" id="appDetail">
+            <p class="empty">Select an applicant to see their details and attach documents.</p>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- ADD APPLICANT (recruitment) -->
@@ -846,6 +880,7 @@ const Q=[
  {k:"email",t:"Uses company email/system as primary work platform",p:5},
  {k:"meet",t:"Required meetings and directives",p:5}];
 const ans={};
+let SELECTED=null;   // currently open applicant in the pipeline
 
 function msg(t,kind){ $("loginMsg").innerHTML=`<div class="msg ${kind}">${esc(t)}</div>`; }
 function busy(btn,on,label){ btn.disabled=on; btn.innerHTML=on?`<span class="spin"></span>Working…`:label; }
@@ -952,18 +987,27 @@ async function loadAll(){
     // employees see only records RLS has already filtered to issued-to-them
     jobs.push(sb.from("compliance_records").select("*").order("created_at",{ascending:false}));
   }
-  if(HRROLE==="recruitment"||HRROLE==="relations"){
-    jobs.push(sb.from("applicants").select("*").order("created_at",{ascending:false}));
-  }
   const r=await Promise.all(jobs);
-  const bad=r.find(x=>x.error);
-  if(bad){console.error(bad.error);}
+  const bad=r.filter(x=>x.error);
+  if(bad.length){
+    console.error("Data load errors:",bad.map(b=>b.error));
+    const msgs=bad.map(b=>b.error.message).join("; ");
+    toast("Some data could not be loaded: "+msgs);
+  }
   D.employees=r[0].data||[]; D.logs=r[1].data||[]; D.leave=r[2].data||[];
   D.deliverables=r[3].data||[]; D.onboarding=r[4].data||[]; D.reviews=r[5].data||[];
   if(ROLE==="hr"){D.compliance=r[6].data||[];D.payruns=r[7].data||[];D.assessments=r[8].data||[];
-                  D.imports=r[9].data||[];D.applicants=r[10]?.data||[];}
-  else{D.compliance=r[6].data||[];
-       if(HRROLE==="recruitment")D.applicants=r[7]?.data||[];}
+                  D.imports=r[9].data||[];}
+  else{D.compliance=r[6].data||[];}
+
+  /* Applicants loaded separately so an index shift elsewhere can't break it */
+  if(HRROLE==="recruitment"||HRROLE==="relations"){
+    const {data:apps,error:appErr}=await sb.from("applicants")
+      .select("*").order("created_at",{ascending:false});
+    if(appErr){console.error("applicants load failed:",appErr);
+               toast("Could not load applicants: "+appErr.message);}
+    D.applicants=apps||[];
+  }
   if(ME){const fresh=D.employees.find(e=>e.id===ME.id); if(fresh)ME=fresh;}
   if(VIEWING){const f=D.employees.find(e=>e.id===VIEWING.id); if(f)VIEWING=f;}
   render();
@@ -1040,6 +1084,20 @@ function renderProfile(){
   $("p_first").value=n.first; $("p_last").value=n.last;
   const en=$("p_empno2"); if(en)en.value=e.emp_no||"";
   Object.entries(PMAP).forEach(([k,id])=>{const el=$(id); if(el)el.value=e[k]||"";});
+
+  /* Employees may read but not edit. Only HR Employee Relations can change records. */
+  const ro = HRROLE!=="relations";
+  ["p_first","p_last"].concat(Object.values(PMAP)).forEach(id=>{
+    const el=$(id); if(!el)return;
+    el.readOnly=ro;
+    el.style.background = ro ? "#eef1f6" : "";
+    el.style.color      = ro ? "var(--muted)" : "";
+  });
+  $("saveProfile").classList.toggle("hidden",ro);
+  const note=$("profileNote");
+  if(note)note.textContent = ro
+    ? "This is your record as held by HR. To correct anything, contact HR Employee Relations."
+    : "";
 }
 $("saveProfile").onclick=async()=>{
   const e=subject(); if(!e)return;
@@ -1073,9 +1131,18 @@ function renderContract(){
   $("c_purpose").value=e.role_purpose||"";
   $("c_duties").value=e.duties||"";
   $("c_reports").value=e.reports_to||"";
-  const ro=ROLE!=="hr";
-  ["c_purpose","c_duties","c_reports"].forEach(i=>$(i).readOnly=ro);
+  const ro=HRROLE!=="relations";
+  ["c_purpose","c_duties","c_reports"].forEach(i=>{
+    const el=$(i); if(!el)return;
+    el.readOnly=ro;
+    el.style.background = ro ? "#eef1f6" : "";
+    el.style.color      = ro ? "var(--muted)" : "";
+  });
   $("saveJD").classList.toggle("hidden",ro);
+  const jn=$("jdNote");
+  if(jn)jn.textContent = ro
+    ? "Read-only. Only HR Employee Relations can edit your contract terms or job description."
+    : "Employees can read this at any time. Only HR can edit.";
 }
 $("saveContract").onclick=async()=>{
   const e=subject();
@@ -1688,20 +1755,47 @@ function renderApplicants(){
     <div class="tile"><div class="n" style="color:var(--low)">${c["Hired"]}</div><div class="l">Hired</div></div>
     <div class="tile"><div class="n" style="color:var(--crit)">${c["Rejected"]}</div><div class="l">Rejected</div></div>`;
 
+  /* build filter dropdowns from the data itself */
+  const fillFilter=(id,vals)=>{
+    const s=$(id),cur=s.value;
+    s.innerHTML=s.options[0].outerHTML+
+      vals.map(v=>`<option>${esc(v)}</option>`).join("");
+    s.value=cur;
+  };
+  const posCounts={},srcCounts={};
+  A.forEach(a=>{
+    if(a.position_applied)posCounts[a.position_applied]=(posCounts[a.position_applied]||0)+1;
+    if(a.source)srcCounts[a.source]=(srcCounts[a.source]||0)+1;
+  });
+  fillFilter("appPosFilter",Object.keys(posCounts).sort((x,y)=>posCounts[y]-posCounts[x]));
+  fillFilter("appSrcFilter",Object.keys(srcCounts).sort());
+
   const q=($("appSearch").value||"").toLowerCase(), sf=$("appStageFilter").value;
-  const rows=A.filter(a=>(!sf||a.stage===sf)&&
+  const pf=$("appPosFilter").value, srcf=$("appSrcFilter").value;
+  const rows=A.filter(a=>(!sf||a.stage===sf)&&(!pf||a.position_applied===pf)&&
+    (!srcf||a.source===srcf)&&
     ((a.first_name||"")+" "+(a.last_name||"")+(a.position_applied||"")).toLowerCase().includes(q));
+  $("appCount").textContent=rows.length===A.length
+    ? `${A.length} applicants`
+    : `Showing ${rows.length} of ${A.length} applicants`;
   $("appRowsList").innerHTML=rows.length?rows.map(a=>
-    `<tr><td><strong>${esc(a.first_name)} ${esc(a.last_name)}</strong>
+    `<tr data-arow="${a.id}" class="${SELECTED===a.id?'picked':''}">
+     <td><strong>${esc(a.first_name)} ${esc(a.last_name)}</strong>
        ${a.email?`<br><span class="note">${esc(a.email)}</span>`:""}</td>
      <td>${esc(a.position_applied||"—")}<br><span class="note">${esc(a.department||"")}</span></td>
      <td>${esc(String(a.created_at).slice(0,10))}<br><span class="note">${esc(a.source||"")}</span></td>
-     <td><select data-astage="${a.id}" style="padding:4px">
+     <td><select data-astage="${a.id}" style="padding:4px" onclick="event.stopPropagation()">
        ${STAGES.map(s=>`<option ${a.stage===s?"selected":""}>${s}</option>`).join("")}</select></td>
      <td>${a.interview_date?esc(a.interview_date):"—"}</td>
-     <td><button class="btn g small" data-aopen="${a.id}">Open</button>
-         <button class="btn g small" data-adel="${a.id}">Remove</button></td></tr>`).join("")
+     <td><button class="btn g small" data-adel="${a.id}" onclick="event.stopPropagation()">Remove</button></td></tr>`).join("")
     :`<tr><td colspan="6" class="empty">No applicants match.</td></tr>`;
+
+  document.querySelectorAll("[data-arow]").forEach(tr=>tr.onclick=()=>{
+    SELECTED=tr.dataset.arow;
+    document.querySelectorAll("[data-arow]").forEach(x=>x.classList.remove("picked"));
+    tr.classList.add("picked");
+    openApplicant(SELECTED);
+  });
 
   document.querySelectorAll("[data-astage]").forEach(s=>s.onchange=async()=>{
     const stage=s.value;
@@ -1713,9 +1807,10 @@ function renderApplicants(){
   });
   document.querySelectorAll("[data-adel]").forEach(b=>b.onclick=async()=>{
     if(!confirm("Remove this applicant permanently?"))return;
+    if(SELECTED===b.dataset.adel){SELECTED=null;
+      $("appDetail").innerHTML=`<p class="empty">Select an applicant to see their details and attach documents.</p>`;}
     await db("applicants","delete",null,b.dataset.adel); await loadAll();
   });
-  document.querySelectorAll("[data-aopen]").forEach(b=>b.onclick=()=>openApplicant(b.dataset.aopen));
 }
 
 function openApplicant(id){
@@ -1743,17 +1838,20 @@ function openApplicant(id){
       <div style="margin-top:12px"><label>Reason</label>
         <input type="text" id="ai_reason" value="${esc(a.rejected_reason||"")}"></div>`:""}
     <h4>Documents</h4>
-    <div class="row" style="margin-bottom:10px">
+    <div class="row" style="margin-bottom:8px">
       <select id="ad_type" style="width:auto">
         <option>CV / Resume</option><option>Application letter</option>
         <option>Certificate</option><option>Transcript</option>
         <option>Valid ID</option><option>Other</option></select>
-      <input type="file" id="ad_file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" style="width:auto">
-      <button class="btn small" data-aupload="${a.id}">Upload</button>
     </div>
-    <div id="ad_list"><p class="note">Loading documents…</p></div>
-    <p class="note">PDF, Word or image, up to 10 MB. Files are private —
-      only recruitment and HR employee relations can open them.</p>
+    <div class="dropzone" id="ad_drop">
+      <div class="big">Drop a file here, or click to choose</div>
+      <div class="sub">PDF, Word or image · up to 10 MB</div>
+      <input type="file" id="ad_file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" style="display:none">
+    </div>
+    <div id="ad_status" class="note"></div>
+    <div id="ad_list" style="margin-top:10px"><p class="note">Loading documents…</p></div>
+    <p class="note">Files are private — only recruitment and HR employee relations can open them.</p>
 
     <div class="row" style="margin-top:14px">
       <button class="btn" data-asave="${a.id}">Save</button>
@@ -1761,7 +1859,11 @@ function openApplicant(id){
       ${a.stage==="Offer"&&HRROLE==="relations"?
         `<button class="btn a" data-ahire="${a.id}">Hire — create employee record</button>`:""}
     </div>`;
-  $("aiClose").onclick=()=>$("appDetail").classList.add("hidden");
+  $("aiClose").onclick=()=>{
+    SELECTED=null;
+    document.querySelectorAll("[data-arow]").forEach(x=>x.classList.remove("picked"));
+    $("appDetail").innerHTML=`<p class="empty">Select an applicant to see their details and attach documents.</p>`;
+  };
 
   /* documents */
   const refreshDocs=async()=>{
@@ -1782,12 +1884,32 @@ function openApplicant(id){
     });
   };
   refreshDocs();
-  document.querySelector(`[data-aupload="${a.id}"]`).onclick=async()=>{
-    const f=$("ad_file").files[0];
-    if(!f){toast("Choose a file first.");return;}
-    const r=await uploadApplicantDoc(a.id,f,$("ad_type").value);
-    if(r){$("ad_file").value="";refreshDocs();toast("Document uploaded.");}
+
+  /* drag & drop upload */
+  const dz=$("ad_drop"), fi=$("ad_file"), st=$("ad_status");
+  const handle=async files=>{
+    const list=[...files];
+    if(!list.length)return;
+    let done=0,failed=0;
+    for(const f of list){
+      st.textContent=`Uploading ${f.name}…`;
+      const r=await uploadApplicantDoc(a.id,f,$("ad_type").value);
+      r?done++:failed++;
+    }
+    fi.value="";
+    st.textContent = failed
+      ? `${done} uploaded, ${failed} failed.`
+      : `${done} file${done>1?"s":""} uploaded.`;
+    setTimeout(()=>{st.textContent="";},4000);
+    refreshDocs();
   };
+  dz.onclick=()=>fi.click();
+  fi.onchange=()=>handle(fi.files);
+  ["dragenter","dragover"].forEach(e=>dz.addEventListener(e,ev=>{
+    ev.preventDefault();ev.stopPropagation();dz.classList.add("over");}));
+  ["dragleave","drop"].forEach(e=>dz.addEventListener(e,ev=>{
+    ev.preventDefault();ev.stopPropagation();dz.classList.remove("over");}));
+  dz.addEventListener("drop",ev=>handle(ev.dataTransfer.files));
   document.querySelector(`[data-asave="${a.id}"]`).onclick=async()=>{
     const patch={interview_date:$("ai_date").value||null,
       rating:$("ai_rating").value?Number($("ai_rating").value):null,
@@ -1808,18 +1930,34 @@ function openApplicant(id){
         {stage:"Hired",hired_employee_id:emp[0].id,updated_at:new Date().toISOString()},a.id);
       await loadAll();
       toast(`${a.first_name} added to the employee directory as Probationary.`);
-      $("appDetail").classList.add("hidden");
+      SELECTED=null;
+      $("appDetail").innerHTML=`<p class="empty">Select an applicant to see their details and attach documents.</p>`;
     }
   };
 }
 $("appSearch").oninput=renderApplicants;
 $("appStageFilter").onchange=renderApplicants;
-$("expApp").onclick=()=>csv("discover-applicants.csv",
-  ["First name","Last name","Email","Mobile","Position","Department","Source",
-   "Stage","Applied","Interview date","Rating","Expected rate","Notes"],
-  (D.applicants||[]).map(a=>[a.first_name,a.last_name,a.email,a.phone,a.position_applied,
-    a.department,a.source,a.stage,String(a.created_at).slice(0,10),
-    a.interview_date,a.rating,a.expected_rate,a.notes]));
+$("appPosFilter").onchange=renderApplicants;
+$("appSrcFilter").onchange=renderApplicants;
+$("appClearFilters").onclick=()=>{
+  $("appSearch").value="";$("appStageFilter").value="";
+  $("appPosFilter").value="";$("appSrcFilter").value="";
+  renderApplicants();
+};
+$("expApp").onclick=()=>{
+  const A=D.applicants||[];
+  const q=($("appSearch").value||"").toLowerCase(), sf=$("appStageFilter").value;
+  const pf=$("appPosFilter").value, srcf=$("appSrcFilter").value;
+  const rows=A.filter(a=>(!sf||a.stage===sf)&&(!pf||a.position_applied===pf)&&
+    (!srcf||a.source===srcf)&&
+    ((a.first_name||"")+" "+(a.last_name||"")+(a.position_applied||"")).toLowerCase().includes(q));
+  csv("discover-applicants.csv",
+   ["First name","Last name","Email","Mobile","Position","Department","Source",
+    "Stage","Applied","Interview date","Rating","Expected rate","Notes"],
+   rows.map(a=>[a.first_name,a.last_name,a.email,a.phone,a.position_applied,
+     a.department,a.source,a.stage,String(a.created_at).slice(0,10),
+     a.interview_date,a.rating,a.expected_rate,a.notes]));
+};
 
 /* ===================== DIRECTORY ===================== */
 $("newEmpBtn").onclick=()=>$("newEmpCard").classList.remove("hidden");
